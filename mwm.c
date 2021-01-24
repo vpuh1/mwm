@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include "config.h"
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 char bg[] = "";
 
 struct {
@@ -31,6 +33,7 @@ static Display *dpy;
 static int screen;
 static Window win;
 static Window root;
+static XWindowAttributes attr;
 static int display_width;
 static int display_height;
 static int tag_width[9];
@@ -90,7 +93,7 @@ static void setup_gc() {
 static void create_bar() {
     win = XCreateSimpleWindow (dpy, root, 0, 0, display_width, bar.height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
 	XSelectInput(dpy, win, StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask );
-    XMapWindow(dpy, win);
+	XMapWindow(dpy, win);
 }
 
 static void load_font() {
@@ -132,17 +135,11 @@ static void init_bar(){
 	for(int i = 0; i < 9; i++){
 		if(i != 0)
 			x += overall.width+bar.space;
-		if(i == active_tag){
-			strcpy(bg, active_ws_bg);
-		}
-		else{
-			strcpy(bg, inactive_ws_bg);
-		}
 		XDrawString(dpy, win, bar.gc, x, y, bar.text[i], bar.text_len[i]);
 	}
 }
 
-void expose_bar() {
+static void expose_bar() {
     XClearWindow(dpy, win);
 	XFillRectangle(dpy, win, title_gc, 0, 0, display_width, bar.height);
 	XFillRectangle(dpy, win, bg_gc, 0, 0, tag_width_sum + bar.space*9, bar.height);
@@ -182,10 +179,6 @@ static void run() {
         XSetLocaleModifiers("@im=none");
         xim = XOpenIM(dpy, 0, 0, 0);
     }
-
-    // X input context, you can have multiple for text boxes etc, but having a
-    // single one is the easiest.
-
     XIC xic = XCreateIC(xim,
                         XNInputStyle,   XIMPreeditNothing | XIMStatusNothing,
                         XNClientWindow, win,
@@ -193,13 +186,15 @@ static void run() {
                         NULL);
 
     XSetICFocus(xic);
-
-    // we want key presses
-
     XSelectInput(dpy, win, KeyPressMask | KeyReleaseMask);
     while (1) {
         XEvent e;
         XNextEvent (dpy, & e);
+		XButtonEvent start;
+		if(e.type == Expose){
+			expose_bar();
+			XFlush(dpy);
+		}
 		if(e.type == KeyPress){
 			/*Status status;
             KeySym keysym = NoSymbol;
@@ -241,16 +236,33 @@ static void run() {
 				}
 			}
 		}
-		else if(e.type == Expose){
-			expose_bar();
-			XFlush(dpy);
+		if(e.type == ButtonPress && e.xbutton.subwindow != None){
+			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
+			start = e.xbutton;
 		}
+		if(e.type == MotionNotify && start.subwindow != None){
+			int xdiff = e.xbutton.x_root - start.x_root;
+			int ydiff = e.xbutton.y_root - start.y_root;
+			XMoveResizeWindow(dpy, start.subwindow,
+				attr.x + (start.button == 1 ? xdiff : 0),
+				attr.y + (start.button == 1 ? ydiff : 0),
+				MAX(1, attr.width+(start.button == 3 ? xdiff : 0)),
+				MAX(1, attr.height+(start.button == 3 ? ydiff : 0)));
+			expose_bar();
+			draw_bar(prev_tag, active_tag);
+		}
+		else if(e.type == ButtonRelease)
+			start.subwindow = None;
     }
+	expose_bar();
+	draw_bar(prev_tag, active_tag);
 }
 
 
 int main(int argc, char ** argv){
 	init();
+	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     run();
     return 0;
 }
