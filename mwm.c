@@ -170,6 +170,18 @@ static void init() {
 	XFlush(dpy);
 }
 
+static void configure_window(XConfigureRequestEvent e) {
+	XWindowChanges changes;
+	changes.x = e.x;
+	changes.y = bar.height;
+	changes.width = e.width;
+	changes.height = e.height;
+	changes.border_width = e.border_width;
+	changes.sibling = e.above;
+  	changes.stack_mode = e.detail;
+	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
+}
+
 static void run() {
 	XSetLocaleModifiers("");
 
@@ -186,15 +198,11 @@ static void run() {
                         NULL);
 
     XSetICFocus(xic);
-    XSelectInput(dpy, win, KeyPressMask | KeyReleaseMask);
+    XSelectInput(dpy, win, KeyPressMask | KeyReleaseMask | ExposureMask);
     while (1) {
         XEvent e;
         XNextEvent (dpy, & e);
 		XButtonEvent start;
-		if(e.type == Expose){
-			expose_bar();
-			XFlush(dpy);
-		}
 		if(e.type == KeyPress){
 			/*Status status;
             KeySym keysym = NoSymbol;
@@ -240,22 +248,34 @@ static void run() {
 			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
 			start = e.xbutton;
 		}
-		if(e.type == MotionNotify && start.subwindow != None){
+		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win){
 			int xdiff = e.xbutton.x_root - start.x_root;
 			int ydiff = e.xbutton.y_root - start.y_root;
 			XMoveResizeWindow(dpy, start.subwindow,
-				attr.x + (start.button == 1 ? xdiff : 0),
-				attr.y + (start.button == 1 ? ydiff : 0),
-				MAX(1, attr.width+(start.button == 3 ? xdiff : 0)),
-				MAX(1, attr.height+(start.button == 3 ? ydiff : 0)));
-			expose_bar();
-			draw_bar(prev_tag, active_tag);
+			(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
+			? (attr.x + (start.button == 1 ? xdiff : 0))
+			: 0),
+			(attr.y + (start.button == 1 ? ydiff : 0) >= bar.height
+			? (attr.y + (start.button == 1 ? ydiff : 0))
+			: bar.height),
+			((attr.x + (start.button == 1 ? xdiff : 0) + MAX(1, attr.width+(start.button == 3 ? xdiff : 0))) <= display_width
+			? MAX(1, attr.width+(start.button == 3 ? xdiff : 0))
+			: display_width),
+			((attr.y + (start.button == 1 ? ydiff : 0) + MAX(1, attr.height+(start.button == 3 ? ydiff : 0))) <= display_height-bar.height
+			? MAX(1, attr.height+(start.button == 3 ? xdiff : 0))
+			: display_height-bar.height));
 		}
 		else if(e.type == ButtonRelease)
 			start.subwindow = None;
+		if(e.type == ConfigureRequest) {
+			configure_window(e.xconfigurerequest);
+		}
+		if(e.type == Expose){
+			expose_bar();
+			draw_bar(prev_tag, active_tag);
+			XFlush(dpy);
+		}
     }
-	expose_bar();
-	draw_bar(prev_tag, active_tag);
 }
 
 
