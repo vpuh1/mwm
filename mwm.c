@@ -251,19 +251,29 @@ static void run() {
 		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win){
 			int xdiff = e.xbutton.x_root - start.x_root;
 			int ydiff = e.xbutton.y_root - start.y_root;
+			int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
+			int check_height = MAX(1, attr.height + (start.button == 3 ? ydiff : 0));
+			int tmp_width, tmp_height;
+
+			if(check_width <= display_width)
+				tmp_width = check_width;
+			else 
+				tmp_width = display_width;
+			if(check_height <= display_height - bar.height)
+				tmp_height = check_height;
+			else
+				tmp_height = display_height - bar.height;
+
 			XMoveResizeWindow(dpy, start.subwindow,
 			(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
-			? (attr.x + (start.button == 1 ? xdiff : 0))
+			? (attr.x + (start.button == 1 ? xdiff: 0) + attr.width <= display_width
+			? (attr.x + (start.button == 1 ? xdiff : 0)) : display_width - attr.width)
 			: 0),
-			(attr.y + (start.button == 1 ? ydiff : 0) >= bar.height
-			? (attr.y + (start.button == 1 ? ydiff : 0))
+			(attr.y + (start.button == 1 ? ydiff : 0) >= bar.height 
+			? (attr.y + (start.button == 1 ? ydiff: 0) + attr.height <= display_height
+			? (attr.y + (start.button == 1 ? ydiff : 0)) : display_height - attr.height)
 			: bar.height),
-			((attr.x + (start.button == 1 ? xdiff : 0) + MAX(1, attr.width+(start.button == 3 ? xdiff : 0))) <= display_width
-			? MAX(1, attr.width+(start.button == 3 ? xdiff : 0))
-			: display_width),
-			((attr.y + (start.button == 1 ? ydiff : 0) + MAX(1, attr.height+(start.button == 3 ? ydiff : 0))) <= display_height-bar.height
-			? MAX(1, attr.height+(start.button == 3 ? xdiff : 0))
-			: display_height-bar.height));
+			tmp_width, tmp_height);
 		}
 		else if(e.type == ButtonRelease)
 			start.subwindow = None;
