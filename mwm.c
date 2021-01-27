@@ -182,6 +182,11 @@ static void configure_window(XConfigureRequestEvent e) {
 	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
 }
 
+static void map_window(XMapRequestEvent e) {
+	XSelectInput(dpy, e.window, KeyPressMask | KeyReleaseMask | ExposureMask);
+	XMapWindow(dpy, e.window);
+}
+
 static void run() {
 	XSetLocaleModifiers("");
 
@@ -236,8 +241,11 @@ static void run() {
 				printf("Got keysym: (%s)\n", sym_name);
 			}
 			if(keysym == XK_Return) */
-			if(e.xkey.state){
+			if(e.xkey.state == 64){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 18){
+					if(e.xkey.subwindow != win){
+						XSetInputFocus(dpy, win, RevertToPointerRoot, CurrentTime);
+					}
 					prev_tag = active_tag;
 					active_tag = e.xkey.keycode-10;
 					draw_bar(prev_tag, active_tag);
@@ -247,6 +255,9 @@ static void run() {
 		if(e.type == ButtonPress && e.xbutton.subwindow != None){
 			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
 			start = e.xbutton;
+			XSelectInput(dpy, start.subwindow, KeyPressMask | KeyReleaseMask | ExposureMask);
+			XRaiseWindow(dpy, start.subwindow);
+			XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
 		}
 		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win){
 			int xdiff = e.xbutton.x_root - start.x_root;
@@ -280,6 +291,9 @@ static void run() {
 		if(e.type == ConfigureRequest) {
 			configure_window(e.xconfigurerequest);
 		}
+		/*if(e.type == MapRequest) {
+			map_window(e.xmaprequest);
+		}*/
 		if(e.type == Expose){
 			expose_bar();
 			draw_bar(prev_tag, active_tag);
@@ -296,4 +310,3 @@ int main(int argc, char ** argv){
     run();
     return 0;
 }
-
