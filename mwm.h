@@ -4,28 +4,29 @@
 /* linked list */
 typedef struct client {
 	Window win;	
+	Window frame;	
 	struct client *next;
 } client;
 
 /* function declaration */
 void print_list(client *head);
 /*void make_list(client *head, int n, int *a);*/
-void push_back(client *head, Window win);
-void push_front(client **head, Window win);
-void push(client *head, int index, Window win);
+void push_back(client *head, Window win, Window frame);
+void push_front(client **head, Window win, Window frame);
+void push(client *head, int index, Window win, Window frame);
 void pop_back(client *head);
 void pop_front(client **head);
-void pop(client *head, Window win);
-void change_back(client *head, Window win);
-void change_front(client *head, Window win);
-void change(client *head, int index, Window win);
+void pop(client *head, int index);
+void change_back(client *head, Window win, Window frame);
+void change_front(client *head, Window win, Window frame);
+void change(client *head, int index, Window win, Window frame);
 void bubblesort(client *head);
 
 /* function implementation */
-void print_list(node *head) {
+void print_list(client *head) {
 	client *current = head;
 	while(current != NULL) {
-		printf("%d ", current->win);
+		printf("Window: %ld Frame: %ld", current->win, current->frame);
 		current = current->next;
 		if(current == NULL) {
 			printf("\n");
@@ -33,7 +34,7 @@ void print_list(node *head) {
 	}
 }
 
-void make_list(client *head, int n, int *a) {
+/*void make_list(client *head, int n, int *a) {
 	client *current = head;
 	for(int i = 0; i < n; i++) {
 		current->win = a[i];
@@ -45,27 +46,29 @@ void make_list(client *head, int n, int *a) {
 		}
 		current = current->next;
 	}
-}
+}*/
 
-void push_back(client *head, int win) {
+void push_back(client *head, Window win, Window frame) {
 	client *current = head;
 	while(current->next != NULL) {
 		current = current->next;
 	}
 	current->next = malloc(sizeof(client));
 	current->next->win = win;
+	current->next->frame = frame;
 	current->next->next = NULL;
 }
 
-void push_front(client **head, int win) {
+void push_front(client **head, Window win, Window frame) {
 	client *new_node;
 	new_node = malloc(sizeof(client));
 	new_node->next = *head;
 	new_node->win = win;
+	new_node->frame = frame;
 	*head = new_node;
 }
 
-void push(client *head, int index, int win) {
+void push(client *head, int index, Window win, Window frame) {
 	client *current = head;
 	for(int i = 0; i < index-1; i++) {
 		if(current->next != NULL) {
@@ -76,8 +79,9 @@ void push(client *head, int index, int win) {
 		return;
 	}
 	client *tmp = current->next;
-	current->next = malloc(sizeof(node));
+	current->next = malloc(sizeof(client));
 	current->next->win = win;
+	current->next->frame = frame;
 	current->next->next = tmp;
 }
 
@@ -116,19 +120,21 @@ void pop(client *head, int index) {
 	current->next = tmp;
 }
 
-void change_front(client *head, int win) {
+void change_front(client *head, Window win, Window frame) {
 	head->win = win;
+	head->frame = frame;
 }
 
-void change_back(client *head, int win) {
+void change_back(client *head, Window win, Window frame) {
 	client *current = head;
 	while(current->next != NULL){
 		current = current->next;
 	}
 	current->win = win;
+	current->frame = frame;
 }
 
-void change(client *head, int index, int win) {
+void change(client *head, int index, Window win, Window frame) {
 	client *current = head;
 	for(int i = 0; i < index-1; i++) {
 		if(current->next != NULL) {
@@ -136,6 +142,7 @@ void change(client *head, int index, int win) {
 		}
 	}
 	current->next->win = win;
+	current->next->frame = frame;
 }
 
 

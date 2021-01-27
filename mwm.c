@@ -5,6 +5,7 @@
 #include <X11/keysym.h>
 #include <unistd.h>
 #include "config.h"
+#include "mwm.h"
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define BORDER_WIDTH 1
@@ -187,7 +188,7 @@ static void configure_window(XConfigureRequestEvent e) {
 	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
 }
 
-static void frame(Window w) {
+static void frame(Window w, client *clients_head) {
 	XColor border_color;
 	Colormap colormap3;
 	colormap3 = DefaultColormap(dpy, 0);
@@ -196,6 +197,7 @@ static void frame(Window w) {
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
 	Window frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, border_color.pixel, BlackPixel(dpy, 0));
+	push_back(clients_head, w, frame);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
 	XReparentWindow(dpy, w, frame, 0, 0);
 	XMapWindow(dpy, frame);
@@ -203,20 +205,21 @@ static void frame(Window w) {
 	XGrabButton(dpy, 3, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 }
 
-static void map_window(XMapRequestEvent e) {
-	frame(e.window);
+static void map_window(XMapRequestEvent e, client *clients_head) {
+	frame(e.window, clients_head);
 	XMapWindow(dpy, e.window);
 }
 
-static void run() {
+static void run(client *clients_head) {
 	XGrabServer(dpy);
 	Window returned_root, returned_parent;
 	Window *top_level_windows;
 	unsigned int num_top_level_windows = 0;
 	XQueryTree(dpy, root, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
 	for(unsigned int i = 0; i < num_top_level_windows; i++) {
-		if(top_level_windows[i] != win)
-			frame(top_level_windows[i]);
+		if(top_level_windows[i] != win) {
+			frame(top_level_windows[i], clients_head);
+		}
 	}
 	XFree(top_level_windows);
 	XUngrabServer(dpy);
@@ -311,7 +314,7 @@ static void run() {
 			configure_window(e.xconfigurerequest);
 		}
 		if(e.type == MapRequest) {
-			map_window(e.xmaprequest);
+			map_window(e.xmaprequest, clients_head);
 		}
 		if(e.type == Expose){
 			expose_bar();
@@ -323,9 +326,11 @@ static void run() {
 
 
 int main(int argc, char ** argv){
+	client *clients_head = NULL;
+	clients_head = (client *)malloc(sizeof(client));
 	init();
 	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    run();
+    run(clients_head);
     return 0;
 }
