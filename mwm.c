@@ -7,6 +7,8 @@
 #include "config.h"
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define BORDER_WIDTH 1
+
 
 char bg[] = "";
 
@@ -17,6 +19,8 @@ struct {
 	int height;
 	int space;
 } bar;
+
+//FILE *f;
 
 static void open_display();
 static void get_display_resolution();
@@ -53,6 +57,7 @@ static void open_display()
     }
     screen = DefaultScreen(dpy);
     root = RootWindow(dpy, screen);
+	XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask);
 }
 
 static void get_display_resolution() {
@@ -91,7 +96,7 @@ static void setup_gc() {
 
 
 static void create_bar() {
-    win = XCreateSimpleWindow (dpy, root, 0, 0, display_width, bar.height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
+    win = XCreateSimpleWindow(dpy, root, 0, 0, display_width, bar.height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
 	XSelectInput(dpy, win, StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask );
 	XMapWindow(dpy, win);
 }
@@ -176,14 +181,30 @@ static void configure_window(XConfigureRequestEvent e) {
 	changes.y = bar.height;
 	changes.width = e.width;
 	changes.height = e.height;
-	changes.border_width = e.border_width;
+	changes.border_width = 5;
 	changes.sibling = e.above;
   	changes.stack_mode = e.detail;
 	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
 }
 
+static void frame(Window w) {
+	XColor border_color;
+	Colormap colormap3;
+	colormap3 = DefaultColormap(dpy, 0);
+	XParseColor(dpy, colormap3, title_bg, &border_color);
+	XAllocColor(dpy, colormap3, &border_color);
+	XWindowAttributes attr;
+	XGetWindowAttributes(dpy, w, &attr);
+	Window frame = XCreateSimpleWindow(dpy, root, attr.x, attr.y, attr.width, attr.height, BORDER_WIDTH, border_color.pixel, BlackPixel(dpy, 0));
+	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
+	XReparentWindow(dpy, w, frame, 0, 0);
+	XMapWindow(dpy, frame);
+	XGrabButton(dpy, 1, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabButton(dpy, 3, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+}
+
 static void map_window(XMapRequestEvent e) {
-	XSelectInput(dpy, e.window, KeyPressMask | KeyReleaseMask | ExposureMask);
+	frame(e.window);
 	XMapWindow(dpy, e.window);
 }
 
@@ -204,9 +225,12 @@ static void run() {
 
     XSetICFocus(xic);
     XSelectInput(dpy, win, KeyPressMask | KeyReleaseMask | ExposureMask);
+	//f = fopen("/home/tema/mwm/log", "a");
+	//fprintf(f, "test\n");
+	fprintf(stderr, "FUCKING TEST!!!!\n");
     while (1) {
         XEvent e;
-        XNextEvent (dpy, & e);
+        XNextEvent (dpy, &e);
 		XButtonEvent start;
 		if(e.type == KeyPress){
 			/*Status status;
@@ -243,9 +267,9 @@ static void run() {
 			if(keysym == XK_Return) */
 			if(e.xkey.state == 64){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 18){
-					if(e.xkey.subwindow != win){
+					/*if(e.xkey.subwindow != win){
 						XSetInputFocus(dpy, win, RevertToPointerRoot, CurrentTime);
-					}
+					}*/
 					prev_tag = active_tag;
 					active_tag = e.xkey.keycode-10;
 					draw_bar(prev_tag, active_tag);
@@ -255,7 +279,7 @@ static void run() {
 		if(e.type == ButtonPress && e.xbutton.subwindow != None){
 			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
 			start = e.xbutton;
-			XSelectInput(dpy, start.subwindow, KeyPressMask | KeyReleaseMask | ExposureMask);
+			//XSelectInput(dpy, start.subwindow, KeyPressMask | KeyReleaseMask | ExposureMask);
 			XRaiseWindow(dpy, start.subwindow);
 			XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
 		}
@@ -291,9 +315,9 @@ static void run() {
 		if(e.type == ConfigureRequest) {
 			configure_window(e.xconfigurerequest);
 		}
-		/*if(e.type == MapRequest) {
+		if(e.type == MapRequest) {
 			map_window(e.xmaprequest);
-		}*/
+		}
 		if(e.type == Expose){
 			expose_bar();
 			draw_bar(prev_tag, active_tag);
@@ -308,5 +332,6 @@ int main(int argc, char ** argv){
 	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     run();
+	//fclose(f);
     return 0;
 }
