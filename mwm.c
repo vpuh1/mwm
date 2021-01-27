@@ -195,7 +195,7 @@ static void frame(Window w) {
 	XAllocColor(dpy, colormap3, &border_color);
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
-	Window frame = XCreateSimpleWindow(dpy, root, attr.x, attr.y, attr.width, attr.height, BORDER_WIDTH, border_color.pixel, BlackPixel(dpy, 0));
+	Window frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, border_color.pixel, BlackPixel(dpy, 0));
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
 	XReparentWindow(dpy, w, frame, 0, 0);
 	XMapWindow(dpy, frame);
@@ -209,22 +209,17 @@ static void map_window(XMapRequestEvent e) {
 }
 
 static void run() {
-	XSetLocaleModifiers("");
-
-    XIM xim = XOpenIM(dpy, 0, 0, 0);
-    if(!xim){
-        // fallback to internal input method
-        XSetLocaleModifiers("@im=none");
-        xim = XOpenIM(dpy, 0, 0, 0);
-    }
-    XIC xic = XCreateIC(xim,
-                        XNInputStyle,   XIMPreeditNothing | XIMStatusNothing,
-                        XNClientWindow, win,
-                        XNFocusWindow,  win,
-                        NULL);
-
-    XSetICFocus(xic);
-    XSelectInput(dpy, win, KeyPressMask | KeyReleaseMask | ExposureMask);
+	XGrabServer(dpy);
+	Window returned_root, returned_parent;
+	Window *top_level_windows;
+	unsigned int num_top_level_windows = 0;
+	XQueryTree(dpy, root, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
+	for(unsigned int i = 0; i < num_top_level_windows; i++) {
+		if(top_level_windows[i] != win)
+			frame(top_level_windows[i]);
+	}
+	XFree(top_level_windows);
+	XUngrabServer(dpy);
 	//f = fopen("/home/tema/mwm/log", "a");
 	//fprintf(f, "test\n");
 	fprintf(stderr, "FUCKING TEST!!!!\n");
@@ -332,6 +327,5 @@ int main(int argc, char ** argv){
 	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
     run();
-	//fclose(f);
     return 0;
 }
