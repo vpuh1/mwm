@@ -215,6 +215,24 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 	XMapWindow(dpy, e.window);
 }
 
+static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
+	client *current = clients_head;
+	int detected = 0;
+	while(current->next != NULL) {
+		if(current->win == e.window) {
+			detected = 1;
+			break;
+		}
+		current = current->next;
+	}
+	if(!detected)
+		return;
+	XUnmapWindow(dpy, current->frame);
+	XRemoveFromSaveSet(dpy, current->frame);
+	XDestroyWindow(dpy, current->frame);
+	//XDestroyWindow(dpy, e.window);
+}
+
 static void run(client *clients_head) {
 	XGrabServer(dpy);
 	Window returned_root, returned_parent;
@@ -315,6 +333,9 @@ static void run(client *clients_head) {
 		}
 		if(e.type == MapRequest) {
 			map_request(e.xmaprequest, clients_head);
+		}
+		else if(e.type == DestroyNotify && e.xunmap.window != root && e.xunmap.window != win) {
+			destroy_frame(e.xdestroywindow, clients_head);
 		}
 		if(e.type == Expose){
 			expose_bar();
