@@ -10,7 +10,6 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define BORDER_WIDTH 1
 
-
 char bg[] = "";
 
 struct {
@@ -20,8 +19,6 @@ struct {
 	int height;
 	int space;
 } bar;
-
-//FILE *f;
 
 static void open_display();
 static void get_display_resolution();
@@ -49,12 +46,7 @@ static XFontStruct *font;
 static GC title_gc;
 static GC bg_gc;
 static int prev_tag = -1;
-static long start_pos_x;
-static long start_pos_y;
-static long pos_x;
-static long pos_y;
-static long frame_width;
-static long frame_height;
+
 static void open_display()
 {
     dpy = XOpenDisplay(NULL);
@@ -74,31 +66,30 @@ static void get_display_resolution() {
 	bar.space = 22;
 }
 
-
 static void setup_gc() {
 	screen = DefaultScreen(dpy);
 	bar.gc = XCreateGC(dpy, win, 0, 0);
 	title_gc = XCreateGC(dpy, win, 0, 0);
 	bg_gc = XCreateGC(dpy, win, 0, 0);
-	XColor inactive_ws_bg_color;
+	XColor inactive_bg_color;
 	Colormap colormap1;
 	colormap1 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap1, inactive_ws_bg, &inactive_ws_bg_color);
-	XAllocColor(dpy, colormap1, &inactive_ws_bg_color);
-	XSetBackground(dpy, bar.gc, inactive_ws_bg_color.pixel); 
-	XColor inactive_ws_fg_color;
+	XParseColor(dpy, colormap1, inactive_bg, &inactive_bg_color);
+	XAllocColor(dpy, colormap1, &inactive_bg_color);
+	XSetBackground(dpy, bar.gc, inactive_bg_color.pixel); 
+	XColor inactive_fg_color;
 	Colormap colormap2;
 	colormap2 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap2, inactive_ws_fg, &inactive_ws_fg_color);
-	XAllocColor(dpy, colormap2, &inactive_ws_fg_color);
-	XSetForeground(dpy, bar.gc, inactive_ws_fg_color.pixel); 
-	XColor title_bg_color;
+	XParseColor(dpy, colormap2, inactive_fg, &inactive_fg_color);
+	XAllocColor(dpy, colormap2, &inactive_fg_color);
+	XSetForeground(dpy, bar.gc, inactive_fg_color.pixel); 
+	XColor active_bg_color;
 	Colormap colormap3;
 	colormap3 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap3, title_bg, &title_bg_color);
-	XAllocColor(dpy, colormap3, &title_bg_color);
-	XSetForeground(dpy, title_gc, title_bg_color.pixel);
-	XSetForeground(dpy, bg_gc, inactive_ws_bg_color.pixel);
+	XParseColor(dpy, colormap3, active_bg, &active_bg_color);
+	XAllocColor(dpy, colormap3, &active_bg_color);
+	XSetForeground(dpy, title_gc, active_bg_color.pixel);
+	XSetForeground(dpy, bg_gc, inactive_bg_color.pixel);
 }
 
 
@@ -169,7 +160,6 @@ static void draw_bar(int prev, int index) {
 	XDrawString(dpy, win, bar.gc, tag_x[index]+bar.space/2, tag_y, bar.text[index], bar.text_len[index]);
 }
 
-
 static void init() {
 	open_display();
 	get_display_resolution();
@@ -198,7 +188,7 @@ static void frame(Window w, client *clients_head) {
 	XColor border_color;
 	Colormap colormap3;
 	colormap3 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap3, title_bg, &border_color);
+	XParseColor(dpy, colormap3, active_bg, &border_color);
 	XAllocColor(dpy, colormap3, &border_color);
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
@@ -216,50 +206,6 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 	XMapWindow(dpy, e.window);
 }
 
-/*static void button_press(XButtonEvent e) {
-	if(e.window != win) {
-		XGetWindowAttributes(dpy, e.window, &attr);
-		start_pos_x = e.x_root;
-		start_pos_y = e.y_root;
-		pos_x = attr.x;
-		pos_y = attr.y;
-		frame_width = attr.width;
-		frame_height = attr.height;
-		XRaiseWindow(dpy, e.window);
-		XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
-	}
-}*/
-
-/*static void motion_notify(XMotionEvent e, client *clients_head) {
-	int xdiff = e.x_root - start_pos_x;
-	int ydiff = e.y_root - start_pos_y;
-	int width_diff = MAX(xdiff, -frame_width);
-	int height_diff = MAX(ydiff, -frame_height);
-	int tmp_width, tmp_height;
-	tmp_width = frame_width + width_diff;
-	tmp_height = frame_height + height_diff;
-	client *current = clients_head;
-	while(current->next != NULL) {
-		if(current->frame == e.window) {
-			break;
-		}
-		current = current->next;
-	}
-	if(e.state & Button1Mask) {
-		XMoveWindow(dpy, e.window,
-		(pos_x+xdiff >= 0 ? pos_x+xdiff + frame_width <= display_width 
-		? pos_x + xdiff : display_width-frame_width
-		: 0),
-		(pos_y+ydiff >= bar.height ? pos_y+ydiff + frame_height <= display_height
-		? pos_y + ydiff : display_height-frame_height
-		: bar.height));
-	}
-	else if(e.state & Button3Mask) {
-		XResizeWindow(dpy, current->win, tmp_width, tmp_height);
-		XResizeWindow(dpy, e.window, tmp_width, tmp_height);
-	}
-}*/
-
 static void run(client *clients_head) {
 	XGrabServer(dpy);
 	Window returned_root, returned_parent;
@@ -273,46 +219,12 @@ static void run(client *clients_head) {
 	}
 	XFree(top_level_windows);
 	XUngrabServer(dpy);
-	//f = fopen("/home/tema/mwm/log", "a");
-	//fprintf(f, "test\n");
 	fprintf(stderr, "FUCKING TEST!!!!\n");
     while (1) {
         XEvent e;
         XNextEvent (dpy, &e);
 		XButtonEvent start;
 		if(e.type == KeyPress){
-			/*Status status;
-            KeySym keysym = NoSymbol;
-			char text[32] = {};
-
-			e.xkey.state &= ~ControlMask;
-			Xutf8LookupString(xic, &e.xkey, text, sizeof(text) - 1, &keysym, &status);
-
-			if(status == XBufferOverflow){
-				// an IME was probably used, and wants to commit more than 32 chars.
-				// ignore this fairly unlikely case for now
-			}
-
-			if(status == XLookupChars){
-				// some characters were returned without an associated key,
-				// again probably the result of an IME
-				printf("Got chars: (%s)\n", text);
-			}
-
-			if(status == XLookupBoth){
-				// we got one or more characters with an associated keysym
-				// (all the keysyms are listed in /usr/include/X11/keysymdef.h)
-
-				char* sym_name = XKeysymToString(keysym);
-				printf("Got both: (%s), (%s)\n", text, sym_name);
-			}
-
-			if(status == XLookupKeySym){
-				// a key without text on it
-				char* sym_name = XKeysymToString(keysym);
-				printf("Got keysym: (%s)\n", sym_name);
-			}
-			if(keysym == XK_Return) */
 			if(e.xkey.state == 64){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 18){
 					/*if(e.xkey.subwindow != win){
@@ -327,13 +239,10 @@ static void run(client *clients_head) {
 		if(e.type == ButtonPress && e.xbutton.subwindow != None){
 			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
 			start = e.xbutton;
-			//XSelectInput(dpy, start.subwindow, KeyPressMask | KeyReleaseMask | ExposureMask);
 			XRaiseWindow(dpy, start.subwindow);
 			XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
-			//button_press(e.xbutton);
 		}
 		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win){
-			//motion_notify(e.xmotion, clients_head);
 			int xdiff = e.xbutton.x_root - start.x_root;
 			int ydiff = e.xbutton.y_root - start.y_root;
 			int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
