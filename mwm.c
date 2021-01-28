@@ -1,9 +1,12 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
+
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
-#include <unistd.h>
+#include <X11/cursorfont.h>
+
 #include "config.h"
 #include "mwm.h"
 
@@ -46,6 +49,7 @@ static XFontStruct *font;
 static GC title_gc;
 static GC bg_gc;
 static int prev_tag = -1;
+static Cursor default_cursor, resize_cursor, move_cursor;
 
 static void open_display()
 {
@@ -90,6 +94,10 @@ static void setup_gc() {
 	XAllocColor(dpy, colormap3, &active_bg_color);
 	XSetForeground(dpy, title_gc, active_bg_color.pixel);
 	XSetForeground(dpy, bg_gc, inactive_bg_color.pixel);
+	resize_cursor =	XCreateFontCursor(dpy, XC_sizing);
+	default_cursor = XCreateFontCursor(dpy, XC_left_ptr);
+	move_cursor = XCreateFontCursor(dpy, XC_fleur);
+	XDefineCursor(dpy, root, default_cursor);
 }
 
 
@@ -221,6 +229,7 @@ static void run(client *clients_head) {
 	XUngrabServer(dpy);
 	fprintf(stderr, "FUCKING TEST!!!!\n");
     while (1) {
+		XDefineCursor(dpy, root, default_cursor);
         XEvent e;
         XNextEvent (dpy, &e);
 		XButtonEvent start;
@@ -237,26 +246,34 @@ static void run(client *clients_head) {
 			}
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None){
-			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
 			start = e.xbutton;
+			XGetWindowAttributes(dpy, start.subwindow, &attr);
 			XRaiseWindow(dpy, start.subwindow);
-			XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
+			client *current = clients_head;
+			while(current->next != NULL) {
+				if(current->frame == start.subwindow) {
+					break;
+				}
+				current = current->next;
+			}
+			XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
+			//XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
 		}
-		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win){
+		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win) {
 			int xdiff = e.xbutton.x_root - start.x_root;
 			int ydiff = e.xbutton.y_root - start.y_root;
 			int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
 			int check_height = MAX(1, attr.height + (start.button == 3 ? ydiff : 0));
 			int tmp_width, tmp_height;
 
-			if(check_width <= display_width)
+			if(attr.x+check_width <= display_width-2*BORDER_WIDTH)
 				tmp_width = check_width;
 			else 
-				tmp_width = display_width;
-			if(check_height <= display_height - bar.height)
+				tmp_width = display_width-2*BORDER_WIDTH-attr.x;
+			if(attr.y+check_height <= display_height-2*BORDER_WIDTH)
 				tmp_height = check_height;
 			else
-				tmp_height = display_height - bar.height;
+				tmp_height = display_height-2*BORDER_WIDTH-attr.y;
 
 			client *current = clients_head;
 			while(current->next != NULL) {
@@ -266,6 +283,12 @@ static void run(client *clients_head) {
 				current = current->next;
 			}
 			
+			if(start.button == 3) {
+				XDefineCursor(dpy, current->win, resize_cursor);
+			}
+			else 
+				XDefineCursor(dpy, current->win, move_cursor);
+
 			XMoveWindow(dpy, start.subwindow,
 			(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
 			? (attr.x + (start.button == 1 ? xdiff: 0) + attr.width <= display_width
@@ -278,8 +301,17 @@ static void run(client *clients_head) {
 			XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
 			XResizeWindow(dpy, current->win, tmp_width, tmp_height);
 		}
-		else if(e.type == ButtonRelease)
+		else if(e.type == ButtonRelease) {
+			client *current = clients_head;
+			while(current->next != NULL) {
+				if(current->frame == start.subwindow) {
+					break;
+				}
+				current = current->next;
+			}
+			XUndefineCursor(dpy, current->win);
 			start.subwindow = None;
+		}
 		if(e.type == ConfigureRequest) {
 			configure_window(e.xconfigurerequest);
 		}
