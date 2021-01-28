@@ -53,13 +53,13 @@ static Cursor default_cursor, resize_cursor, move_cursor;
 
 static void open_display()
 {
-    dpy = XOpenDisplay(NULL);
-    if (!dpy) {
-        fprintf (stderr, "Could not open display\n");
-        exit (1);
-    }
-    screen = DefaultScreen(dpy);
-    root = RootWindow(dpy, screen);
+	dpy = XOpenDisplay(NULL);
+	if (!dpy) {
+		fprintf (stderr, "Could not open display\n");
+		exit (1);
+	}
+	screen = DefaultScreen(dpy);
+	root = RootWindow(dpy, screen);
 	XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask);
 }
 
@@ -102,17 +102,17 @@ static void setup_gc() {
 
 
 static void create_bar() {
-    win = XCreateSimpleWindow(dpy, root, 0, 0, display_width, bar.height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
+	win = XCreateSimpleWindow(dpy, root, 0, 0, display_width, bar.height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
 	XSelectInput(dpy, win, StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask );
 	XMapWindow(dpy, win);
 }
 
 static void load_font() {
-    font = XLoadQueryFont(dpy, font_name);
-    if(!font) {
-        fprintf(stderr, "Unable to load font %s\n", font_name);
-        font = XLoadQueryFont (dpy, "fixed");
-    }
+	font = XLoadQueryFont(dpy, font_name);
+	if(!font) {
+		fprintf(stderr, "Unable to load font %s\n", font_name);
+		font = XLoadQueryFont (dpy, "fixed");
+	}
 	XSetFont(dpy, bar.gc, font->fid);
 }
 
@@ -125,22 +125,22 @@ static void setup_bar_tags() {
 }
 
 static void init_bar(){
-    int x;
-    int y;
-    int direction;
-    int ascent;
-    int descent;
-    XCharStruct overall;
+	int x;
+	int y;
+	int direction;
+	int ascent;
+	int descent;
+	XCharStruct overall;
 	for(int i = 0; i < 9; i++){
-    	XTextExtents (font, bar.text[i], bar.text_len[i], & direction, & ascent, & descent, & overall);
+		XTextExtents (font, bar.text[i], bar.text_len[i], & direction, & ascent, & descent, & overall);
 		tag_width[i] = overall.width;
 		tag_x[i] = bar.space*i+tag_width_sum;
 		tag_width_sum+=tag_width[i];
 	}
 	x = bar.space/2;
-    y = bar.height / 2 + (ascent - descent) / 2;
+	y = bar.height / 2 + (ascent - descent) / 2;
 	tag_y = y;
-    XClearWindow(dpy, win);
+	XClearWindow(dpy, win);
 	XFillRectangle(dpy, win, title_gc, 0, 0, display_width, bar.height);
 	XFillRectangle(dpy, win, bg_gc, 0, 0, tag_width_sum + bar.space*9, bar.height);
 	for(int i = 0; i < 9; i++){
@@ -151,7 +151,7 @@ static void init_bar(){
 }
 
 static void expose_bar() {
-    XClearWindow(dpy, win);
+	XClearWindow(dpy, win);
 	XFillRectangle(dpy, win, title_gc, 0, 0, display_width, bar.height);
 	XFillRectangle(dpy, win, bg_gc, 0, 0, tag_width_sum + bar.space*9, bar.height);
 	for(int i = 0; i < 9; i++){
@@ -188,7 +188,7 @@ static void configure_window(XConfigureRequestEvent e) {
 	changes.height = e.height;
 	changes.border_width = 5;
 	changes.sibling = e.above;
-  	changes.stack_mode = e.detail;
+	changes.stack_mode = e.detail;
 	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
 }
 
@@ -228,17 +228,17 @@ static void run(client *clients_head) {
 	XFree(top_level_windows);
 	XUngrabServer(dpy);
 	fprintf(stderr, "FUCKING TEST!!!!\n");
-    while (1) {
+	while (1) {
 		XDefineCursor(dpy, root, default_cursor);
-        XEvent e;
-        XNextEvent (dpy, &e);
+		XEvent e;
+		XNextEvent (dpy, &e);
 		XButtonEvent start;
 		if(e.type == KeyPress){
 			if(e.xkey.state == 64){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 18){
 					/*if(e.xkey.subwindow != win){
-						XSetInputFocus(dpy, win, RevertToPointerRoot, CurrentTime);
-					}*/
+					  XSetInputFocus(dpy, win, RevertToPointerRoot, CurrentTime);
+					  }*/
 					prev_tag = active_tag;
 					active_tag = e.xkey.keycode-10;
 					draw_bar(prev_tag, active_tag);
@@ -282,7 +282,7 @@ static void run(client *clients_head) {
 				}
 				current = current->next;
 			}
-			
+
 			if(start.button == 3) {
 				XDefineCursor(dpy, current->win, resize_cursor);
 			}
@@ -290,14 +290,14 @@ static void run(client *clients_head) {
 				XDefineCursor(dpy, current->win, move_cursor);
 
 			XMoveWindow(dpy, start.subwindow,
-			(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
-			? (attr.x + (start.button == 1 ? xdiff: 0) + attr.width <= display_width
-			? (attr.x + (start.button == 1 ? xdiff : 0)) : display_width - attr.width)
-			: 0),
-			(attr.y + (start.button == 1 ? ydiff : 0) >= bar.height 
-			? (attr.y + (start.button == 1 ? ydiff: 0) + attr.height <= display_height
-			? (attr.y + (start.button == 1 ? ydiff : 0)) : display_height - attr.height)
-			: bar.height));
+					(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
+					 ? (attr.x + (start.button == 1 ? xdiff: 0) + attr.width <= display_width
+						 ? (attr.x + (start.button == 1 ? xdiff : 0)) : display_width - attr.width)
+					 : 0),
+					(attr.y + (start.button == 1 ? ydiff : 0) >= bar.height 
+					 ? (attr.y + (start.button == 1 ? ydiff: 0) + attr.height <= display_height
+						 ? (attr.y + (start.button == 1 ? ydiff : 0)) : display_height - attr.height)
+					 : bar.height));
 			XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
 			XResizeWindow(dpy, current->win, tmp_width, tmp_height);
 		}
@@ -323,7 +323,7 @@ static void run(client *clients_head) {
 			draw_bar(prev_tag, active_tag);
 			XFlush(dpy);
 		}
-    }
+	}
 }
 
 
@@ -333,6 +333,6 @@ int main(int argc, char ** argv){
 	init();
 	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-    run(clients_head);
-    return 0;
+	run(clients_head);
+	return 0;
 }
