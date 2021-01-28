@@ -207,6 +207,7 @@ static void frame(Window w, client *clients_head) {
 	XMapWindow(dpy, frame);
 	XGrabButton(dpy, 1, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabKey(dpy, AnyKey, Mod4Mask, w, True, GrabModeAsync, GrabModeAsync);
 }
 
 static void map_request(XMapRequestEvent e, client *clients_head) {
@@ -234,11 +235,8 @@ static void run(client *clients_head) {
 		XNextEvent (dpy, &e);
 		XButtonEvent start;
 		if(e.type == KeyPress){
-			if(e.xkey.state == 64){
-				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 18){
-					/*if(e.xkey.subwindow != win){
-					  XSetInputFocus(dpy, win, RevertToPointerRoot, CurrentTime);
-					  }*/
+			if(e.xkey.state ){
+				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
 					prev_tag = active_tag;
 					active_tag = e.xkey.keycode-10;
 					draw_bar(prev_tag, active_tag);
