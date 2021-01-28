@@ -49,6 +49,12 @@ static XFontStruct *font;
 static GC title_gc;
 static GC bg_gc;
 static int prev_tag = -1;
+static long start_pos_x;
+static long start_pos_y;
+static long pos_x;
+static long pos_y;
+static long frame_width;
+static long frame_height;
 static void open_display()
 {
     dpy = XOpenDisplay(NULL);
@@ -205,10 +211,54 @@ static void frame(Window w, client *clients_head) {
 	XGrabButton(dpy, 3, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 }
 
-static void map_window(XMapRequestEvent e, client *clients_head) {
+static void map_request(XMapRequestEvent e, client *clients_head) {
 	frame(e.window, clients_head);
 	XMapWindow(dpy, e.window);
 }
+
+/*static void button_press(XButtonEvent e) {
+	if(e.window != win) {
+		XGetWindowAttributes(dpy, e.window, &attr);
+		start_pos_x = e.x_root;
+		start_pos_y = e.y_root;
+		pos_x = attr.x;
+		pos_y = attr.y;
+		frame_width = attr.width;
+		frame_height = attr.height;
+		XRaiseWindow(dpy, e.window);
+		XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
+	}
+}*/
+
+/*static void motion_notify(XMotionEvent e, client *clients_head) {
+	int xdiff = e.x_root - start_pos_x;
+	int ydiff = e.y_root - start_pos_y;
+	int width_diff = MAX(xdiff, -frame_width);
+	int height_diff = MAX(ydiff, -frame_height);
+	int tmp_width, tmp_height;
+	tmp_width = frame_width + width_diff;
+	tmp_height = frame_height + height_diff;
+	client *current = clients_head;
+	while(current->next != NULL) {
+		if(current->frame == e.window) {
+			break;
+		}
+		current = current->next;
+	}
+	if(e.state & Button1Mask) {
+		XMoveWindow(dpy, e.window,
+		(pos_x+xdiff >= 0 ? pos_x+xdiff + frame_width <= display_width 
+		? pos_x + xdiff : display_width-frame_width
+		: 0),
+		(pos_y+ydiff >= bar.height ? pos_y+ydiff + frame_height <= display_height
+		? pos_y + ydiff : display_height-frame_height
+		: bar.height));
+	}
+	else if(e.state & Button3Mask) {
+		XResizeWindow(dpy, current->win, tmp_width, tmp_height);
+		XResizeWindow(dpy, e.window, tmp_width, tmp_height);
+	}
+}*/
 
 static void run(client *clients_head) {
 	XGrabServer(dpy);
@@ -280,8 +330,10 @@ static void run(client *clients_head) {
 			//XSelectInput(dpy, start.subwindow, KeyPressMask | KeyReleaseMask | ExposureMask);
 			XRaiseWindow(dpy, start.subwindow);
 			XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
+			//button_press(e.xbutton);
 		}
 		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win){
+			//motion_notify(e.xmotion, clients_head);
 			int xdiff = e.xbutton.x_root - start.x_root;
 			int ydiff = e.xbutton.y_root - start.y_root;
 			int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
@@ -297,7 +349,15 @@ static void run(client *clients_head) {
 			else
 				tmp_height = display_height - bar.height;
 
-			XMoveResizeWindow(dpy, start.subwindow,
+			client *current = clients_head;
+			while(current->next != NULL) {
+				if(current->frame == start.subwindow) {
+					break;
+				}
+				current = current->next;
+			}
+			
+			XMoveWindow(dpy, start.subwindow,
 			(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
 			? (attr.x + (start.button == 1 ? xdiff: 0) + attr.width <= display_width
 			? (attr.x + (start.button == 1 ? xdiff : 0)) : display_width - attr.width)
@@ -305,8 +365,9 @@ static void run(client *clients_head) {
 			(attr.y + (start.button == 1 ? ydiff : 0) >= bar.height 
 			? (attr.y + (start.button == 1 ? ydiff: 0) + attr.height <= display_height
 			? (attr.y + (start.button == 1 ? ydiff : 0)) : display_height - attr.height)
-			: bar.height),
-			tmp_width, tmp_height);
+			: bar.height));
+			XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
+			XResizeWindow(dpy, current->win, tmp_width, tmp_height);
 		}
 		else if(e.type == ButtonRelease)
 			start.subwindow = None;
@@ -314,7 +375,7 @@ static void run(client *clients_head) {
 			configure_window(e.xconfigurerequest);
 		}
 		if(e.type == MapRequest) {
-			map_window(e.xmaprequest, clients_head);
+			map_request(e.xmaprequest, clients_head);
 		}
 		if(e.type == Expose){
 			expose_bar();
