@@ -50,6 +50,7 @@ static GC title_gc;
 static GC bg_gc;
 static int prev_tag = -1;
 static Cursor default_cursor, resize_cursor, move_cursor;
+static int num_clients = 0;
 
 static void open_display()
 {
@@ -217,6 +218,7 @@ static void frame(Window w, client *clients_head) {
 }
 
 static void map_request(XMapRequestEvent e, client *clients_head) {
+	num_clients += 1;
 	frame(e.window, clients_head);
 	XMapWindow(dpy, e.window);
 }
@@ -224,11 +226,11 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 static void destroy_frame(XUnmapEvent e, client *clients_head) {
 	client *current = clients_head;
 	int detected = 0;
-	int cnt = 0;
+	int cnt = -1;
 	while(current != NULL) {
+		cnt++;
 		if(current->win == e.window) {
 			fprintf(stderr, "%d WINDOW %ld FRAME %ld\n", cnt, current->win, current->frame);
-			cnt++;
 			detected = 1;
 			break;
 		}
@@ -238,8 +240,13 @@ static void destroy_frame(XUnmapEvent e, client *clients_head) {
 		return;
 	XUnmapWindow(dpy, current->frame);
 	XDestroyWindow(dpy, current->frame);
-	current->win = 0;
-	current->frame = 0;
+	num_clients--;
+	if(cnt != num_clients - 1 && cnt != 0)
+		pop(clients_head, cnt);
+	else if(cnt == 0)
+		pop_front(&clients_head);
+	else 
+		pop_back(clients_head);
 }
 
 static void run(client *clients_head) {
@@ -249,14 +256,16 @@ static void run(client *clients_head) {
 	unsigned int num_top_level_windows = 0;
 	XQueryTree(dpy, root, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
 	for(unsigned int i = 0; i < num_top_level_windows; i++) {
-		if(top_level_windows[i] != win) {
+		if(top_level_windows[i] != win && top_level_windows[i] != root) {
 			frame(top_level_windows[i], clients_head);
+			num_clients++;
 		}
 	}
 	XFree(top_level_windows);
 	XUngrabServer(dpy);
 	fprintf(stderr, "FUCKING TEST!!!!\n");
 	while (1) {
+		fprintf(stderr, "CLIENTS NUM: %d\n", num_clients);
 		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
