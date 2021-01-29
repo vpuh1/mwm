@@ -193,6 +193,12 @@ static void configure_window(XConfigureRequestEvent e) {
 }
 
 static void frame(Window w, client *clients_head) {
+	client *current = clients_head;
+	while(current != NULL) {
+		if(current->frame == w)
+			return;
+		current = current->next;
+	}
 	XColor border_color;
 	Colormap colormap3;
 	colormap3 = DefaultColormap(dpy, 0);
@@ -221,27 +227,19 @@ static void destroy_frame(XUnmapEvent e, client *clients_head) {
 	int cnt = 0;
 	while(current != NULL) {
 		if(current->win == e.window) {
+			fprintf(stderr, "%d WINDOW %ld FRAME %ld\n", cnt, current->win, current->frame);
 			cnt++;
-			fprintf(stderr, "WINDOW DETECTED %d\n", cnt);
 			detected = 1;
 			break;
 		}
 		current = current->next;
 	}
-	//if(!detected)
-//		return;
+	if(!detected)
+		return;
 	XUnmapWindow(dpy, current->frame);
-	//XReparentWindow(dpy, e.window, root, 0, 0);
-	//XRemoveFromSaveSet(dpy, e.window);
-	//XDestroyWindow(dpy, e.window);
-	//XDestroyWindow(dpy, current->frame);
+	XDestroyWindow(dpy, current->frame);
 	current->win = 0;
 	current->frame = 0;
-	//XDestroyWindow(dpy, e.window);
-	/*XUnmapWindow(dpy, current->frame);
-	XRemoveFromSaveSet(dpy, current->frame);
-	XDestroyWindow(dpy, current->frame);*/
-	//XDestroyWindow(dpy, e.window);
 }
 
 static void run(client *clients_head) {
@@ -277,7 +275,7 @@ static void run(client *clients_head) {
 			XGetWindowAttributes(dpy, start.subwindow, &attr);
 			XRaiseWindow(dpy, start.subwindow);
 			client *current = clients_head;
-			while(current->next != NULL) {
+			while(current != NULL) {
 				if(current->frame == start.subwindow) {
 					break;
 				}
@@ -303,7 +301,7 @@ static void run(client *clients_head) {
 				tmp_height = display_height-2*BORDER_WIDTH-attr.y;
 
 			client *current = clients_head;
-			while(current->next != NULL) {
+			while(current != NULL) {
 				if(current->frame == start.subwindow) {
 					break;
 				}
@@ -330,7 +328,7 @@ static void run(client *clients_head) {
 		}
 		else if(e.type == ButtonRelease) {
 			client *current = clients_head;
-			while(current->next != NULL) {
+			while(current != NULL) {
 				if(current->frame == start.subwindow) {
 					break;
 				}
@@ -347,7 +345,7 @@ static void run(client *clients_head) {
 		}
 		else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
 			destroy_frame(e.xunmap, clients_head);
-			fprintf(stderr, "MapRequest: %ld\n", e.xunmap.window);
+			fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
 		}
 		if(e.type == Expose){
 			expose_bar();
@@ -362,6 +360,7 @@ int main(int argc, char ** argv){
 	client *clients_head = NULL;
 	clients_head = (client *)malloc(sizeof(client));
 	init();
+	fprintf(stderr, "ROOT IS %ld\n", root);
 	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	run(clients_head);
