@@ -345,7 +345,7 @@ static void run(client *clients_head) {
 			XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
 			XResizeWindow(dpy, current->win, tmp_width, tmp_height);
 		}
-		else if(e.type == ButtonRelease && e.xbutton.subwindow != root) {
+		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None) {
 			client *current = clients_head->next;
 			while(current != NULL) {
 				if(current->frame == start.subwindow) {
