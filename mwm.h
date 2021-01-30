@@ -10,7 +10,6 @@ typedef struct client {
 
 /* function declaration */
 void print_list(client *head);
-/*void make_list(client *head, int n, int *a);*/
 void push_back(client *head, Window win, Window frame);
 void push_front(client **head, Window win, Window frame);
 void push(client *head, int index, Window win, Window frame);
@@ -20,7 +19,6 @@ void pop(client *head, int index);
 void change_back(client *head, Window win, Window frame);
 void change_front(client *head, Window win, Window frame);
 void change(client *head, int index, Window win, Window frame);
-void bubblesort(client *head);
 
 /* function implementation */
 void print_list(client *head) {
@@ -33,20 +31,6 @@ void print_list(client *head) {
 		}
 	}
 }
-
-/*void make_list(client *head, int n, int *a) {
-	client *current = head;
-	for(int i = 0; i < n; i++) {
-		current->win = a[i];
-		if(i != n-1) {
-			current->next = malloc(sizeof(client));
-		}
-		else {
-			current->next = NULL;
-		}
-		current = current->next;
-	}
-}*/
 
 void push_back(client *head, Window win, Window frame) {
 	client *current = head;
@@ -144,51 +128,3 @@ void change(client *head, int index, Window win, Window frame) {
 	current->next->win = win;
 	current->next->frame = frame;
 }
-
-
-/*void bubblesort(node *head) {
-	for(node *curi = head; curi->next != NULL; curi = curi->next) {
-		for(node *curj = curi->next; curj != NULL; curj = curj->next) {
-			if(curi->win > curj->win) {
-				int tmp = curi->win;
-				curi->win = curj->win;
-				curj->win = tmp;
-			}
-		}
-	}
-}*/
-
-/*int main() {
-	node *head = NULL;
-	head = malloc(sizeof(node));
-	if(head == NULL){
-		return 1;
-	}
-	int n;
-	printf("Number of elements: ");
-	scanf("%d", &n);
-	printf("Elements: ");
-	int a[n];
-	for(int i = 0; i < n; i++) {
-		scanf("%d", &a[i]);
-	}
-	make_list(head, n, a);
-	print_list(head);
-	pop_front(&head);
-	print_list(head);
-	pop(head, 2);
-	print_list(head);
-	push_front(&head, 100);
-	print_list(head);
-	push_front(&head, 200);
-	print_list(head);
-	push_back(head, 300);
-	print_list(head);
-	push_back(head, 400);
-	print_list(head);
-	push_front(&head, 500);
-	print_list(head);
-	bubblesort(head);
-	print_list(head);
-	return 0;
-}*/
