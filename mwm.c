@@ -181,7 +181,7 @@ static void init() {
 	XFlush(dpy);
 }
 
-static void configure_window(XConfigureRequestEvent e) {
+/*static void configure_window(XConfigureRequestEvent e) {
 	XWindowChanges changes;
 	changes.x = e.x;
 	changes.y = bar.height;
@@ -191,10 +191,10 @@ static void configure_window(XConfigureRequestEvent e) {
 	changes.sibling = e.above;
 	changes.stack_mode = e.detail;
 	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
-}
+}*/
 
 static void frame(Window w, client *clients_head) {
-	client *current = clients_head;
+	client *current = clients_head->next;
 	while(current != NULL) {
 		if(current->frame == w)
 			return;
@@ -224,7 +224,7 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 }
 
 static void destroy_frame(XUnmapEvent e, client *clients_head) {
-	client *current = clients_head;
+	client *current = clients_head->next;
 	int detected = 0;
 	int cnt = -1;
 	while(current != NULL) {
@@ -265,7 +265,7 @@ static void run(client *clients_head) {
 	XUngrabServer(dpy);
 	fprintf(stderr, "FUCKING TEST!!!!\n");
 	while (1) {
-		fprintf(stderr, "CLIENTS NUM: %d\n", num_clients);
+		print_list(clients_head);
 		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
@@ -279,21 +279,30 @@ static void run(client *clients_head) {
 				}
 			}
 		}
-		if(e.type == ButtonPress && e.xbutton.subwindow != None){
-			start = e.xbutton;
-			XGetWindowAttributes(dpy, start.subwindow, &attr);
-			XRaiseWindow(dpy, start.subwindow);
-			client *current = clients_head;
+		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root){
+			/*Window focused;
+			XGetInputFocus(dpy, &focused, RevertToNone);
+			if(focused != e.)*/
+			int detected = 0;
+			fprintf(stderr, "CLICKED WINDOW: %ld", e.xbutton.window);
+			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
+			XRaiseWindow(dpy, e.xbutton.subwindow);
+			client *current = clients_head->next;
 			while(current != NULL) {
-				if(current->frame == start.subwindow) {
+				if(current->frame == e.xbutton.subwindow) {
+					detected = 1;
 					break;
 				}
 				current = current->next;
 			}
-			XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
+			if(detected){
+				start = e.xbutton;
+			 	XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
+			}
 			//XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
 		}
-		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win) {
+		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win && start.subwindow != root) {
+			fprintf(stderr, "MOTION NOTIFY FOR WINDOW %ld\n", start.subwindow);
 			int xdiff = e.xbutton.x_root - start.x_root;
 			int ydiff = e.xbutton.y_root - start.y_root;
 			int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
@@ -309,7 +318,7 @@ static void run(client *clients_head) {
 			else
 				tmp_height = display_height-2*BORDER_WIDTH-attr.y;
 
-			client *current = clients_head;
+			client *current = clients_head->next;
 			while(current != NULL) {
 				if(current->frame == start.subwindow) {
 					break;
@@ -335,8 +344,8 @@ static void run(client *clients_head) {
 			XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
 			XResizeWindow(dpy, current->win, tmp_width, tmp_height);
 		}
-		else if(e.type == ButtonRelease) {
-			client *current = clients_head;
+		else if(e.type == ButtonRelease && e.xbutton.window != root) {
+			client *current = clients_head->next;
 			while(current != NULL) {
 				if(current->frame == start.subwindow) {
 					break;
@@ -346,13 +355,13 @@ static void run(client *clients_head) {
 			XUndefineCursor(dpy, current->win);
 			start.subwindow = None;
 		}
-		if(e.type == ConfigureRequest) {
+		/*if(e.type == ConfigureRequest) {
 			configure_window(e.xconfigurerequest);
-		}
+		}*/
 		if(e.type == MapRequest) {
 			map_request(e.xmaprequest, clients_head);
 		}
-		else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
+		if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
 			destroy_frame(e.xunmap, clients_head);
 			fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
 		}
