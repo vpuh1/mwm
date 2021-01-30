@@ -181,7 +181,7 @@ static void init() {
 	XFlush(dpy);
 }
 
-/*static void configure_window(XConfigureRequestEvent e) {
+static void configure_window(XConfigureRequestEvent e) {
 	XWindowChanges changes;
 	changes.x = e.x;
 	changes.y = bar.height;
@@ -191,15 +191,17 @@ static void init() {
 	changes.sibling = e.above;
 	changes.stack_mode = e.detail;
 	XConfigureWindow(dpy, e.window, e.value_mask, &changes);
-}*/
+}
 
 static void frame(Window w, client *clients_head) {
 	client *current = clients_head->next;
 	while(current != NULL) {
-		if(current->frame == w)
+		if(current->frame == w) {
 			return;
+		}
 		current = current->next;
 	}
+	num_clients += 1;
 	XColor border_color;
 	Colormap colormap3;
 	colormap3 = DefaultColormap(dpy, 0);
@@ -218,7 +220,6 @@ static void frame(Window w, client *clients_head) {
 }
 
 static void map_request(XMapRequestEvent e, client *clients_head) {
-	num_clients += 1;
 	frame(e.window, clients_head);
 	XMapWindow(dpy, e.window);
 }
@@ -230,7 +231,7 @@ static void destroy_frame(XUnmapEvent e, client *clients_head) {
 	while(current != NULL) {
 		cnt++;
 		if(current->win == e.window) {
-			fprintf(stderr, "%d WINDOW %ld FRAME %ld\n", cnt, current->win, current->frame);
+			//fprintf(stderr, "%d WINDOW %ld FRAME %ld\n", cnt, current->win, current->frame);
 			detected = 1;
 			break;
 		}
@@ -238,14 +239,15 @@ static void destroy_frame(XUnmapEvent e, client *clients_head) {
 	}
 	if(!detected)
 		return;
+	//XDestroyWindow(dpy, current->frame);
 	XUnmapWindow(dpy, current->frame);
 	XDestroyWindow(dpy, current->frame);
 	num_clients--;
-	if(cnt != num_clients - 1 && cnt != 0)
+	if(cnt != num_clients && cnt != 0)
 		pop(clients_head, cnt);
 	else if(cnt == 0)
 		pop_front(&clients_head);
-	else 
+	else if(cnt != -1) 
 		pop_back(clients_head);
 }
 
@@ -258,7 +260,6 @@ static void run(client *clients_head) {
 	for(unsigned int i = 0; i < num_top_level_windows; i++) {
 		if(top_level_windows[i] != win && top_level_windows[i] != root) {
 			frame(top_level_windows[i], clients_head);
-			num_clients++;
 		}
 	}
 	XFree(top_level_windows);
@@ -284,9 +285,10 @@ static void run(client *clients_head) {
 			XGetInputFocus(dpy, &focused, RevertToNone);
 			if(focused != e.)*/
 			int detected = 0;
-			fprintf(stderr, "CLICKED WINDOW: %ld", e.xbutton.window);
-			XGetWindowAttributes(dpy, e.xbutton.subwindow, &attr);
-			XRaiseWindow(dpy, e.xbutton.subwindow);
+			fprintf(stderr, "CLICKED WINDOW: %ld", e.xbutton.subwindow);
+			start = e.xbutton;
+			XGetWindowAttributes(dpy, start.subwindow, &attr);
+			XRaiseWindow(dpy, start.subwindow);
 			client *current = clients_head->next;
 			while(current != NULL) {
 				if(current->frame == e.xbutton.subwindow) {
@@ -296,7 +298,6 @@ static void run(client *clients_head) {
 				current = current->next;
 			}
 			if(detected){
-				start = e.xbutton;
 			 	XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
 			}
 			//XSetInputFocus(dpy, start.subwindow, RevertToPointerRoot, CurrentTime);
@@ -344,7 +345,7 @@ static void run(client *clients_head) {
 			XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
 			XResizeWindow(dpy, current->win, tmp_width, tmp_height);
 		}
-		else if(e.type == ButtonRelease && e.xbutton.window != root) {
+		else if(e.type == ButtonRelease && e.xbutton.subwindow != root) {
 			client *current = clients_head->next;
 			while(current != NULL) {
 				if(current->frame == start.subwindow) {
@@ -361,9 +362,9 @@ static void run(client *clients_head) {
 		if(e.type == MapRequest) {
 			map_request(e.xmaprequest, clients_head);
 		}
-		if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
+		else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
 			destroy_frame(e.xunmap, clients_head);
-			fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
+			//fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
 		}
 		if(e.type == Expose){
 			expose_bar();
@@ -378,7 +379,7 @@ int main(int argc, char ** argv){
 	client *clients_head = NULL;
 	clients_head = (client *)malloc(sizeof(client));
 	init();
-	fprintf(stderr, "ROOT IS %ld\n", root);
+	//fprintf(stderr, "ROOT IS %ld\n", root);
 	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	run(clients_head);

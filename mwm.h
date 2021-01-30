@@ -26,10 +26,10 @@ void bubblesort(client *head);
 void print_list(client *head) {
 	client *current = head;
 	while(current != NULL) {
-		printf("Window: %ld Frame: %ld", current->win, current->frame);
+		fprintf(stderr, "Window: %ld Frame: %ld", current->win, current->frame);
 		current = current->next;
 		if(current == NULL) {
-			printf("\n");
+			fprintf(stderr, "\n");
 		}
 	}
 }
