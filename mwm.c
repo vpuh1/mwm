@@ -12,7 +12,7 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define BORDER_WIDTH 1
-
+#define CLEANMASK(mask)         (mask & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
 char bg[] = "";
 
 struct {
@@ -233,7 +233,7 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 	}
 	if(need_to_map) {
 		XMapWindow(dpy, e.window);
-		XSetInputFocus(dpy, e.window, RevertToParent, CurrentTime);
+		XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
 	}
 }
 
@@ -253,7 +253,7 @@ static void button_press(XButtonEvent e, client *clients_head) {
 		XGetWindowAttributes(dpy, start.subwindow, &attr);
 		XRaiseWindow(dpy, start.subwindow);
 		XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
-		focused_window[ws_num] = e.window;
+		focused_window[ws_num] = current->frame;
 	}
 	else
 		return;
@@ -361,7 +361,26 @@ static void change_workspace(client *clients_head) {
 		}
 		current = current->next;
 	}
-	XSetInputFocus(dpy, focused_window[ws_num], RevertToParent, CurrentTime);
+	XSetInputFocus(dpy, focused_window[ws_num], RevertToPointerRoot, CurrentTime);
+}
+
+static void move_window_to_ws(int move_to, client *clients_head) {
+	Window focused_win;
+	int revert;
+	XGetInputFocus(dpy, &focused_win, &revert);
+	if(focused_win == root || focused_win == None || focused_win == win)
+		return;
+	client *current = clients_head->next;
+	while(current != NULL) {
+		if(current->win == focused_win || current->frame == focused_win) {
+			XUnmapWindow(dpy, current->win);
+			XUnmapWindow(dpy, current->frame);
+			focused_window[current->ws_num] = root;
+			current->ws_num = move_to;
+			focused_window[move_to] = current->frame;
+		}
+		current = current->next;
+	}
 }
 
 static void run(client *clients_head) {
@@ -384,13 +403,20 @@ static void run(client *clients_head) {
 		XEvent e;
 		XNextEvent (dpy, &e);
 		if(e.type == KeyPress){
-			if(e.xkey.state ){
+			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
+				for(unsigned int i = 0; i < 10; i++) { 
+					if(e.xkey.keycode == i+10)
+						move_window_to_ws(i, clients_head);
+				}
+			}
+			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
 					prev_tag = active_tag;
 					active_tag = e.xkey.keycode-10;
 					ws_num = active_tag;
 					change_workspace(clients_head);
 					draw_bar(prev_tag, active_tag);
+					client *current = clients_head;
 				}
 				/*if(e.xkey.keycode == 36) {
 					execvp(term_name, NULL);
