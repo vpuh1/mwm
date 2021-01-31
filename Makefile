@@ -1,2 +1,2 @@
 mwm: mwm.c mwm.h
-	gcc mwm.c -Wall -Wextra -o mwm -lX11
+	gcc mwm.c -Wall -o mwm -lX11

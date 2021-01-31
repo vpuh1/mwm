@@ -13,6 +13,7 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define BORDER_WIDTH 1
 #define CLEANMASK(mask)         (mask & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
+
 char bg[] = "";
 
 struct {
@@ -383,6 +384,33 @@ static void move_window_to_ws(int move_to, client *clients_head) {
 	}
 }
 
+static void change_focus(Window w, client *clients_head) {
+	client *current = clients_head->next;
+	int detected = 0;
+	while(current != NULL) {
+		if(current->win == w || current->frame == w) {
+			detected = 1;
+		}
+		else if(current->ws_num == ws_num && detected) {
+			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
+			XRaiseWindow(dpy, current->frame);
+			return;
+		}
+		current = current->next;
+	}
+	if(!detected)
+		return;
+	current = clients_head->next;
+	while(current != NULL) {
+		if(current->ws_num == ws_num && current->win != w && current->frame != w) {
+			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
+			XRaiseWindow(dpy, current->frame);
+			return;
+		}
+		current = current->next;
+	}
+}
+
 static void run(client *clients_head) {
 	XGrabServer(dpy);
 	Window returned_root, returned_parent;
@@ -403,9 +431,10 @@ static void run(client *clients_head) {
 		XEvent e;
 		XNextEvent (dpy, &e);
 		if(e.type == KeyPress){
+			KeySym keysym = XKeycodeToKeysym(dpy, e.xkey.keycode, 0);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
-				for(unsigned int i = 0; i < 10; i++) { 
-					if(e.xkey.keycode == i+10)
+				for(int i = 0; i < 10; i++) { 
+					if((int)e.xkey.keycode == i+10 && i != ws_num)
 						move_window_to_ws(i, clients_head);
 				}
 			}
@@ -416,11 +445,10 @@ static void run(client *clients_head) {
 					ws_num = active_tag;
 					change_workspace(clients_head);
 					draw_bar(prev_tag, active_tag);
-					client *current = clients_head;
 				}
-				/*if(e.xkey.keycode == 36) {
-					execvp(term_name, NULL);
-				}*/
+			}
+			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_Tab) {
+				change_focus(e.xkey.window, clients_head);
 			}
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win){
@@ -436,7 +464,7 @@ static void run(client *clients_head) {
 			map_request(e.xmaprequest, clients_head);
 		}
 		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win) {
-			printf("Unmpa notify!\n");
+			printf("Unmap notify!\n");
 			destroy_frame(e.xdestroywindow, clients_head);
 			//fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
 		}
@@ -454,8 +482,8 @@ int main(int argc, char ** argv){
 	clients_head = (client *)malloc(sizeof(client));
 	init();
 	//fprintf(stderr, "ROOT IS %ld\n", root);
-	XGrabButton(dpy, 1, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-	XGrabButton(dpy, 3, Mod1Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabButton(dpy, 1, Mod4Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabButton(dpy, 3, Mod4Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	run(clients_head);
 	return 0;
 }
