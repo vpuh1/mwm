@@ -338,12 +338,19 @@ static void destroy_frame(XUnmapEvent e, client *clients_head) {
 static void change_workspace(client *clients_head) {
 	client *current = clients_head->next;
 	while(current != NULL) {
-		if(current->ws_num != ws_num && current->win != root){
-			XUnmapWindow(dpy, current->win);
-			XUnmapWindow(dpy, current->frame);
+		if(current->win != root && current->win != win){
+			if(current->ws_num == ws_num) {
+				XMapWindow(dpy, current->win);
+				XMapWindow(dpy, current->frame);
+			}
+			else {
+				XUnmapWindow(dpy, current->win);
+				XUnmapWindow(dpy, current->frame);
+			}
 		}
 		current = current->next;
 	}
+	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
 }
 
 static void run(client *clients_head) {
@@ -391,11 +398,11 @@ static void run(client *clients_head) {
 			fprintf(stderr, "Map Request for window %ld\n", e.xmaprequest.window);
 			map_request(e.xmaprequest, clients_head);
 		}
-		else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
+		/*else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
 			printf("Unmpa notify!\n");
 			destroy_frame(e.xunmap, clients_head);
 			//fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
-		}
+		}*/
 		if(e.type == Expose){
 			expose_bar();
 			draw_bar(prev_tag, active_tag);
