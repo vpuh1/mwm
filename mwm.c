@@ -55,6 +55,7 @@ static int prev_tag = -1;
 static Cursor default_cursor, resize_cursor, move_cursor;
 static int num_clients = 0;
 static XButtonEvent start;
+static int ws_num = 0;
 
 static void open_display()
 {
@@ -202,7 +203,7 @@ static void frame(Window w, client *clients_head) {
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
 	Window frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, border_color.pixel, BlackPixel(dpy, 0));
-	push_back(clients_head, w, frame);
+	push_back(clients_head, w, frame, ws_num);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
 	XReparentWindow(dpy, w, frame, 0, 0);
 	XMapWindow(dpy, frame);
@@ -212,26 +213,39 @@ static void frame(Window w, client *clients_head) {
 }
 
 static void map_request(XMapRequestEvent e, client *clients_head) {
+	int need_to_map = 1;
 	frame(e.window, clients_head);
-	XMapWindow(dpy, e.window);
+	client *current = clients_head;
+	while(current != NULL) {
+		if(current->frame == e.window && current->ws_num != ws_num) {
+			need_to_map = 0;
+			break;
+		}
+		current = current->next;
+	}
+	if(need_to_map)
+		XMapWindow(dpy, e.window);
 }
 
 static void button_press(XButtonEvent e, client *clients_head) {
 	int detected = 0;
-	fprintf(stderr, "CLICKED WINDOW: %ld", e.subwindow);
-	start = e;
-	XGetWindowAttributes(dpy, start.subwindow, &attr);
-	XRaiseWindow(dpy, start.subwindow);
 	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->frame == e.subwindow) {
+	while(current != NULL) { 
+		if(current->frame == e.subwindow && current->ws_num == ws_num) {
 			detected = 1;
 			break;
 		}
 		current = current->next;
 	}
-	if(detected)
+	if(detected) {
+		fprintf(stderr, "CLICKED WINDOW: %ld", e.subwindow);
+		start = e;
+		XGetWindowAttributes(dpy, start.subwindow, &attr);
+		XRaiseWindow(dpy, start.subwindow);
 		XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
+	}
+	else
+		return;
 }
 
 static void move_resize_window(XButtonEvent e, client *clients_head) {
@@ -279,13 +293,17 @@ static void move_resize_window(XButtonEvent e, client *clients_head) {
 }
 
 static void button_release(client *clients_head) {
+	int detected = 0;
 	client *current = clients_head->next;
 	while(current != NULL) {
-		if(current->frame == start.subwindow) {
+		if(current->frame == start.subwindow && current->ws_num == ws_num) {
+			detected = 1;
 			break;
 		}
 		current = current->next;
 	}
+	if(!detected)
+		return;
 	XUndefineCursor(dpy, current->win);
 	start.subwindow = None;
 }
@@ -317,6 +335,17 @@ static void destroy_frame(XUnmapEvent e, client *clients_head) {
 		pop_back(clients_head);
 }
 
+static void change_workspace(client *clients_head) {
+	client *current = clients_head->next;
+	while(current != NULL) {
+		if(current->ws_num != ws_num && current->win != root){
+			XUnmapWindow(dpy, current->win);
+			XUnmapWindow(dpy, current->frame);
+		}
+		current = current->next;
+	}
+}
+
 static void run(client *clients_head) {
 	XGrabServer(dpy);
 	Window returned_root, returned_parent;
@@ -341,6 +370,8 @@ static void run(client *clients_head) {
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
 					prev_tag = active_tag;
 					active_tag = e.xkey.keycode-10;
+					ws_num = active_tag;
+					change_workspace(clients_head);
 					draw_bar(prev_tag, active_tag);
 				}
 				/*if(e.xkey.keycode == 36) {
@@ -361,6 +392,7 @@ static void run(client *clients_head) {
 			map_request(e.xmaprequest, clients_head);
 		}
 		else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
+			printf("Unmpa notify!\n");
 			destroy_frame(e.xunmap, clients_head);
 			//fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
 		}
