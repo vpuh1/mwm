@@ -343,17 +343,26 @@ static void run(client *clients_head) {
 					active_tag = e.xkey.keycode-10;
 					draw_bar(prev_tag, active_tag);
 				}
+				if(e.xkey.keycode == 36) {
+					if(fork() == 0){
+						if(dpy)
+							close(ConnectionNumber(dpy));
+					}
+					execvp(term_name, term_args);
+					//system(term_name);
+				}
 			}
 		}
-		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root){
+		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win){
 			button_press(e.xbutton, clients_head);
 		}
 		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win && start.subwindow != root) {
 			move_resize_window(e.xbutton, clients_head);
 		}
-		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None)
+		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None && e.xbutton.subwindow != win)
 			button_release(clients_head);
 		if(e.type == MapRequest) {
+			fprintf(stderr, "Map Request for window %ld\n", e.xmaprequest.window);
 			map_request(e.xmaprequest, clients_head);
 		}
 		else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {

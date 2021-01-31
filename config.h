@@ -7,3 +7,6 @@ char active_fg[] = "#FFFFFF";
 char active_bg[] = "#1E81B0";
 char inactive_fg[] = "#FFFFFF";
 char inactive_bg[] = "#21130D";
+
+static const char *term_name = "tabbed";
+static const char *term_args[7] = {"-c", "-r", "2", "st", "-w", "''", NULL};
