@@ -56,6 +56,13 @@ static Cursor default_cursor, resize_cursor, move_cursor;
 static int num_clients = 0;
 static XButtonEvent start;
 static int ws_num = 0;
+static Window focused_window[10];
+
+static void init_focused_windows() {
+	for(int i = 0; i < 10; i++){
+		focused_window[i] = win;
+	}
+}
 
 static void open_display()
 {
@@ -66,7 +73,7 @@ static void open_display()
 	}
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
-	XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask);
+	XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask);
 }
 
 static void get_display_resolution() {
@@ -182,6 +189,7 @@ static void init() {
 	load_font();
 	setup_bar_tags();
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
+	init_focused_windows();
 	init_bar();
 	XFlush(dpy);
 }
@@ -223,8 +231,10 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 		}
 		current = current->next;
 	}
-	if(need_to_map)
+	if(need_to_map) {
 		XMapWindow(dpy, e.window);
+		XSetInputFocus(dpy, e.window, RevertToParent, CurrentTime);
+	}
 }
 
 static void button_press(XButtonEvent e, client *clients_head) {
@@ -243,6 +253,7 @@ static void button_press(XButtonEvent e, client *clients_head) {
 		XGetWindowAttributes(dpy, start.subwindow, &attr);
 		XRaiseWindow(dpy, start.subwindow);
 		XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
+		focused_window[ws_num] = e.window;
 	}
 	else
 		return;
@@ -308,7 +319,7 @@ static void button_release(client *clients_head) {
 	start.subwindow = None;
 }
 
-static void destroy_frame(XUnmapEvent e, client *clients_head) {
+static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	client *current = clients_head->next;
 	int detected = 0;
 	int cnt = -1;
@@ -350,7 +361,7 @@ static void change_workspace(client *clients_head) {
 		}
 		current = current->next;
 	}
-	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
+	XSetInputFocus(dpy, focused_window[ws_num], RevertToParent, CurrentTime);
 }
 
 static void run(client *clients_head) {
@@ -398,11 +409,11 @@ static void run(client *clients_head) {
 			fprintf(stderr, "Map Request for window %ld\n", e.xmaprequest.window);
 			map_request(e.xmaprequest, clients_head);
 		}
-		/*else if(e.type == UnmapNotify && e.xunmap.window != root && e.xunmap.window != win) {
+		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win) {
 			printf("Unmpa notify!\n");
-			destroy_frame(e.xunmap, clients_head);
+			destroy_frame(e.xdestroywindow, clients_head);
 			//fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
-		}*/
+		}
 		if(e.type == Expose){
 			expose_bar();
 			draw_bar(prev_tag, active_tag);
