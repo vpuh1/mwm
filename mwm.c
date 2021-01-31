@@ -343,14 +343,9 @@ static void run(client *clients_head) {
 					active_tag = e.xkey.keycode-10;
 					draw_bar(prev_tag, active_tag);
 				}
-				if(e.xkey.keycode == 36) {
-					if(fork() == 0){
-						if(dpy)
-							close(ConnectionNumber(dpy));
-					}
-					execvp(term_name, term_args);
-					//system(term_name);
-				}
+				/*if(e.xkey.keycode == 36) {
+					execvp(term_name, NULL);
+				}*/
 			}
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win){
