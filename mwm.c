@@ -409,11 +409,47 @@ static void run(client *clients_head) {
 		XNextEvent (dpy, &e);
 		if(e.type == KeyPress){
 			KeySym keysym = XKeycodeToKeysym(dpy, e.xkey.keycode, 0);
+			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)) {
+				if(keysym == XK_Return) {
+					char *argvv[] = {"st", NULL};
+					pid_t pid;
+					pid  = fork();
+					if(pid == 0) {
+						execvp("st", argvv);
+					}
+				}
+			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
 				for(int i = 0; i < 10; i++) { 
 					if((int)e.xkey.keycode == i + 10 && i != ws_num)
 						move_to_ws(i, clients_head);
 				}
+			}
+			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask | ShiftMask)) && keysym == XK_c && e.xkey.window != root && e.xkey.window != win) {
+				int detected = 0;
+				client *cur = clients_head->next;
+				int cnt = 0;
+				for(; cur != NULL; cur = cur->next) {
+					cnt++;
+					if(cur->win == e.xkey.window) {
+						detected = 1;
+						Window tmp_frame = cur->frame;
+						Window tmp_win = cur->win;
+						XUnmapWindow(dpy, cur->win);
+						XUnmapWindow(dpy, cur->frame);
+						change_focus(tmp_win, clients_head);
+						if(cnt != num_clients && cnt != 0)
+							pop(clients_head, cnt);
+						if(cnt == num_clients) 
+							pop_back(clients_head);
+						num_clients--;
+						XDestroyWindow(dpy, tmp_win);
+						XDestroyWindow(dpy, tmp_frame);
+						break;
+					}
+				}
+				if(!detected)
+					fprintf(stderr, "mwm: could not found frame window, killing window. %ld\n", e.xkey.window);
 			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
@@ -456,6 +492,7 @@ static void run(client *clients_head) {
 
 
 int main(int argc, char ** argv){
+	XInitThreads();
 	client *clients_head = NULL;
 	clients_head = (client *)malloc(sizeof(client));
 	init();
