@@ -179,12 +179,9 @@ static void init() {
 }
 
 static void frame(Window w, client *clients_head) {
-	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->frame == w) {
+	for(client *cur = clients_head->next; cur != NULL; cur = cur->next) {
+		if(cur->frame == w)
 			return;
-		}
-		current = current->next;
 	}
 	num_clients += 1;
 	XWindowAttributes attr;
@@ -200,43 +197,30 @@ static void frame(Window w, client *clients_head) {
 }
 
 static void map_request(XMapRequestEvent e, client *clients_head) {
-	int need_to_map = 1;
 	frame(e.window, clients_head);
-	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->frame == e.window && current->ws_num != ws_num) {
-			need_to_map = 0;
-			break;
+	for(client *cur = clients_head; cur != NULL; cur = cur->next) {
+		if(cur->frame == e.window && cur->ws_num != ws_num) {
+			return;
 		}
-		current = current->next;
 	}
-	if(need_to_map) {
-		XMapWindow(dpy, e.window);
-		XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
-		focused_window[ws_num] = e.window;
-	}
+	XMapWindow(dpy, e.window);
+	XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
+	focused_window[ws_num] = e.window;
 }
 
 static void button_press(XButtonEvent e, client *clients_head) {
-	int detected = 0;
-	client *current = clients_head->next;
-	while(current != NULL) { 
-		if(current->frame == e.subwindow && current->ws_num == ws_num) {
-			detected = 1;
-			break;
+	client *cur = clients_head->next;
+	for(; cur != NULL; cur = cur->next) {
+		if(cur->frame == e.subwindow && cur->ws_num == ws_num) {
+			fprintf(stderr, "CLICKED WINDOW: %ld", e.subwindow);
+			start = e;
+			XGetWindowAttributes(dpy, start.subwindow, &attr);
+			XRaiseWindow(dpy, start.subwindow);
+			XSetInputFocus(dpy, cur->win, RevertToNone, CurrentTime);
+			focused_window[ws_num] = cur->win;
+			return;
 		}
-		current = current->next;
 	}
-	if(detected) {
-		fprintf(stderr, "CLICKED WINDOW: %ld", e.subwindow);
-		start = e;
-		XGetWindowAttributes(dpy, start.subwindow, &attr);
-		XRaiseWindow(dpy, start.subwindow);
-		XSetInputFocus(dpy, current->win, RevertToNone, CurrentTime);
-		focused_window[ws_num] = current->win;
-	}
-	else
-		return;
 }
 
 static void move_resize_window(XButtonEvent e, client *clients_head) {
@@ -256,19 +240,17 @@ static void move_resize_window(XButtonEvent e, client *clients_head) {
 	else
 		tmp_height = display_height-2*BORDER_WIDTH-attr.y;
 
-	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->frame == start.subwindow) {
+	client *cur = clients_head->next;
+	for(; cur != NULL; cur = cur->next) {
+		if(cur->frame == start.subwindow) {
 			break;
 		}
-		current = current->next;
 	}
-
 	if(start.button == 3) {
-		XDefineCursor(dpy, current->win, resize_cursor);
+		XDefineCursor(dpy, cur->win, resize_cursor);
 	}
 	else 
-		XDefineCursor(dpy, current->win, move_cursor);
+		XDefineCursor(dpy, cur->win, move_cursor);
 
 	XMoveWindow(dpy, start.subwindow,
 			(attr.x + (start.button == 1 ? xdiff : 0) >= 0 
@@ -280,107 +262,91 @@ static void move_resize_window(XButtonEvent e, client *clients_head) {
 				 ? (attr.y + (start.button == 1 ? ydiff : 0)) : display_height - attr.height)
 			 : bar.height));
 	XResizeWindow(dpy, start.subwindow, tmp_width, tmp_height);
-	XResizeWindow(dpy, current->win, tmp_width, tmp_height);
+	XResizeWindow(dpy, cur->win, tmp_width, tmp_height);
 }
 
 static void button_release(client *clients_head) {
-	int detected = 0;
-	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->frame == start.subwindow && current->ws_num == ws_num) {
-			detected = 1;
-			break;
+	client *cur= clients_head->next;
+	for(; cur != NULL; cur = cur->next) {
+		if(cur->frame == start.subwindow && cur->ws_num == ws_num) {
+			XUndefineCursor(dpy, cur->win);
+			start.subwindow = None;
+			return;
 		}
-		current = current->next;
 	}
-	if(!detected)
-		return;
-	XUndefineCursor(dpy, current->win);
-	start.subwindow = None;
 }
 
 
 void change_focus(Window w, client *clients_head) {
-	client *current = clients_head->next;
+	client *cur = clients_head->next;
 	int detected = 0;
-	while(current != NULL) {
-		if((current->win == w || current->frame == w )&& current->win != root) {
+	for(; cur != NULL; cur = cur->next) {
+		if((cur->win == w || cur->frame == w )&& cur->win != root) {
 			detected = 1;
 		}
-		else if(current->ws_num == ws_num && detected) {
-			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
-			focused_window[ws_num] = current->win;
-			XRaiseWindow(dpy, current->frame);
+		else if(cur->ws_num == ws_num && detected) {
+			XSetInputFocus(dpy, cur->win, RevertToParent, CurrentTime);
+			focused_window[ws_num] = cur->win;
+			XRaiseWindow(dpy, cur->frame);
 			return;
 		}
-		current = current->next;
 	}
 	if(!detected) {
 		XSetInputFocus(dpy, root, RevertToNone, CurrentTime);
 		focused_window[ws_num] = root;
 		return;
 	}
-	current = clients_head->next;
-	while(current != NULL) {
-		if(current->ws_num == ws_num && current->win != w && current->frame != w && current->win != root) {
-			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
-			focused_window[ws_num] = current->win;
-			XRaiseWindow(dpy, current->frame);
+	for(cur = clients_head->next; cur != NULL; cur = cur->next) {
+		if(cur->ws_num == ws_num && cur->win != w && cur->frame != w && cur->win != root) {
+			XSetInputFocus(dpy, cur->win, RevertToParent, CurrentTime);
+			focused_window[ws_num] = cur->win;
+			XRaiseWindow(dpy, cur->frame);
 			return;
 		}
-		current = current->next;
 	}
 	XSetInputFocus(dpy, root, RevertToNone, CurrentTime);
 	focused_window[ws_num] = root;
 }
 
 static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
-	client *current = clients_head->next;
-	int detected = 0;
+	client *cur = clients_head->next;
 	int cnt = 0;
-	while(current != NULL) {
+	for(; cur != NULL; cur = cur->next) {
 		cnt++;
-		if(current->win == e.window) {
-			detected = 1;
-			break;
+		if(cur->win == e.window) {
+			change_focus(e.window, clients_head);
+			XUnmapWindow(dpy, cur->frame);
+			XDestroyWindow(dpy, cur->frame);
+			num_clients--;
+			if(cnt != num_clients && cnt != 0)
+				pop(clients_head, cnt);
+			else if(cnt != num_clients) 
+				pop_back(clients_head);
+			return;
 		}
-		current = current->next;
 	}
-	if(!detected)
-		return;
-	change_focus(e.window, clients_head);
-	XUnmapWindow(dpy, current->frame);
-	XDestroyWindow(dpy, current->frame);
-	num_clients--;
-	if(cnt != num_clients && cnt != 0)
-		pop(clients_head, cnt);
-	else if(cnt != num_clients) 
-		pop_back(clients_head);
 }
 
 static void change_ws(client *clients_head) {
-	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->win != root && current->win != win){
-			if(current->ws_num == ws_num) {
-				XMapWindow(dpy, current->win);
-				XMapWindow(dpy, current->frame);
+	client *cur = clients_head->next;
+	for(; cur != NULL; cur = cur->next) {
+		if(cur->win != root && cur->win != win){
+			if(cur->ws_num == ws_num) {
+				XMapWindow(dpy, cur->win);
+				XMapWindow(dpy, cur->frame);
 			}
 			else {
-				XUnmapWindow(dpy, current->win);
-				XUnmapWindow(dpy, current->frame);
+				XUnmapWindow(dpy, cur->win);
+				XUnmapWindow(dpy, cur->frame);
 			}
 		}
-		current = current->next;
 	}
 	XSetInputFocus(dpy, focused_window[ws_num], RevertToNone, CurrentTime);
-	current = clients_head->next;
-	while(current != NULL) {
-		if(current->win == focused_window[ws_num] && focused_window[ws_num] != root) {
-			XRaiseWindow(dpy, current->frame);
+	for(cur = clients_head->next; cur != NULL; cur = cur->next) {
+		if(cur->win == focused_window[ws_num] && focused_window[ws_num] != root) {
+			XRaiseWindow(dpy, cur->frame);
 			return;
 		}
-		current = current->next;
 	}
 }
 
@@ -390,16 +356,15 @@ static void move_to_ws(int move_to, client *clients_head) {
 	XGetInputFocus(dpy, &focused_win, &revert);
 	if(focused_win == root || focused_win == None || focused_win == win)
 		return;
-	client *current = clients_head->next;
-	while(current != NULL) {
-		if(current->win == focused_win || current->frame == focused_win) {
-			XUnmapWindow(dpy, current->win);
-			XUnmapWindow(dpy, current->frame);
+	client *cur= clients_head->next;
+	for(; cur != NULL; cur = cur->next) {
+		if(cur->win == focused_win || cur->frame == focused_win) {
+			XUnmapWindow(dpy, cur->win);
+			XUnmapWindow(dpy, cur->frame);
 			change_focus(focused_win, clients_head);
-			current->ws_num = move_to;
-			focused_window[move_to] = current->win;
+			cur->ws_num = move_to;
+			focused_window[move_to] = cur->win;
 		}
-		current = current->next;
 	}
 }
 
