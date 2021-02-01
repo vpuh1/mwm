@@ -61,7 +61,7 @@ static Window focused_window[10];
 
 static void init_focused_windows() {
 	for(int i = 0; i < 10; i++){
-		focused_window[i] = win;
+		focused_window[i] = root;
 	}
 }
 
@@ -235,6 +235,7 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 	if(need_to_map) {
 		XMapWindow(dpy, e.window);
 		XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
+		focused_window[ws_num] = e.window;
 	}
 }
 
@@ -254,7 +255,7 @@ static void button_press(XButtonEvent e, client *clients_head) {
 		XGetWindowAttributes(dpy, start.subwindow, &attr);
 		XRaiseWindow(dpy, start.subwindow);
 		XSetInputFocus(dpy, current->win, RevertToNone, CurrentTime);
-		focused_window[ws_num] = current->frame;
+		focused_window[ws_num] = current->win;
 	}
 	else
 		return;
@@ -320,6 +321,41 @@ static void button_release(client *clients_head) {
 	start.subwindow = None;
 }
 
+
+void change_focus(Window w, client *clients_head) {
+	client *current = clients_head->next;
+	int detected = 0;
+	while(current != NULL) {
+		if((current->win == w || current->frame == w )&& current->win != root) {
+			detected = 1;
+		}
+		else if(current->ws_num == ws_num && detected) {
+			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
+			focused_window[ws_num] = current->win;
+			XRaiseWindow(dpy, current->frame);
+			return;
+		}
+		current = current->next;
+	}
+	if(!detected) {
+		XSetInputFocus(dpy, root, RevertToNone, CurrentTime);
+		focused_window[ws_num] = root;
+		return;
+	}
+	current = clients_head->next;
+	while(current != NULL) {
+		if(current->ws_num == ws_num && current->win != w && current->frame != w && current->win != root) {
+			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
+			focused_window[ws_num] = current->win;
+			XRaiseWindow(dpy, current->frame);
+			return;
+		}
+		current = current->next;
+	}
+	XSetInputFocus(dpy, root, RevertToNone, CurrentTime);
+	focused_window[ws_num] = root;
+}
+
 static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	client *current = clients_head->next;
 	int detected = 0;
@@ -336,6 +372,7 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	if(!detected)
 		return;
 	//XDestroyWindow(dpy, current->frame);
+	change_focus(e.window, clients_head);
 	XUnmapWindow(dpy, current->frame);
 	XDestroyWindow(dpy, current->frame);
 	num_clients--;
@@ -360,7 +397,15 @@ static void change_workspace(client *clients_head) {
 		}
 		current = current->next;
 	}
-	XSetInputFocus(dpy, focused_window[ws_num], RevertToPointerRoot, CurrentTime);
+	XSetInputFocus(dpy, focused_window[ws_num], RevertToNone, CurrentTime);
+	current = clients_head->next;
+	while(current != NULL) {
+		if(current->win == focused_window[ws_num] && focused_window[ws_num] != root) {
+			XRaiseWindow(dpy, current->frame);
+			return;
+		}
+		current = current->next;
+	}
 }
 
 static void move_window_to_ws(int move_to, client *clients_head) {
@@ -374,40 +419,14 @@ static void move_window_to_ws(int move_to, client *clients_head) {
 		if(current->win == focused_win || current->frame == focused_win) {
 			XUnmapWindow(dpy, current->win);
 			XUnmapWindow(dpy, current->frame);
-			focused_window[current->ws_num] = root;
+			change_focus(focused_win, clients_head);
 			current->ws_num = move_to;
-			focused_window[move_to] = current->frame;
+			focused_window[move_to] = current->win;
 		}
 		current = current->next;
 	}
 }
 
-static void change_focus(Window w, client *clients_head) {
-	client *current = clients_head->next;
-	int detected = 0;
-	while(current != NULL) {
-		if(current->win == w || current->frame == w) {
-			detected = 1;
-		}
-		else if(current->ws_num == ws_num && detected) {
-			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
-			XRaiseWindow(dpy, current->frame);
-			return;
-		}
-		current = current->next;
-	}
-	if(!detected)
-		return;
-	current = clients_head->next;
-	while(current != NULL) {
-		if(current->ws_num == ws_num && current->win != w && current->frame != w) {
-			XSetInputFocus(dpy, current->win, RevertToParent, CurrentTime);
-			XRaiseWindow(dpy, current->frame);
-			return;
-		}
-		current = current->next;
-	}
-}
 
 static void run(client *clients_head) {
 	XGrabServer(dpy);
