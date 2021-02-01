@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/cursorfont.h>
@@ -18,8 +17,7 @@ struct {
 	GC gc;
 	char text_len[9];
 	char *text[9];
-	int height;
-	int space;
+	int height; int space;
 } bar;
 
 static void open_display();
@@ -33,6 +31,7 @@ static void frame();
 static void map_request();
 static void destroy_frame();
 
+static int wm_mode = 0; /* floating mod */
 static int active_tag = 0;
 static int screen;
 static int display_width;
@@ -186,7 +185,13 @@ static void frame(Window w, client *clients_head) {
 	num_clients += 1;
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
-	Window frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
+	Window frame;
+	if(wm_mode == 0)
+		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
+	else {
+		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
+		XResizeWindow(dpy, w, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+	}
 	push_back(clients_head, w, frame, ws_num);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
 	XReparentWindow(dpy, w, frame, 0, 0);
@@ -284,7 +289,7 @@ void change_focus(Window w, client *clients_head) {
 		if((cur->win == w || cur->frame == w )&& cur->win != root) {
 			detected = 1;
 		}
-		else if(cur->ws_num == ws_num && detected) {
+		else if(cur->ws_num == ws_num && detected && cur->win != root) {
 			XSetInputFocus(dpy, cur->win, RevertToParent, CurrentTime);
 			focused_window[ws_num] = cur->win;
 			XRaiseWindow(dpy, cur->frame);
@@ -371,6 +376,17 @@ static void move_to_ws(int move_to, client *clients_head) {
 	}
 }
 
+static void change_wm_mode(Window w, int mode, client *clients_head) {
+	if(mode == 1) {
+		client *cur = clients_head->next;
+		for(; cur != NULL; cur = cur->next) {
+			if(cur->win == w) {
+				XResizeWindow(dpy, w, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+				XResizeWindow(dpy, cur->frame, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+			}
+		}
+	}
+}
 
 static void run(client *clients_head) {
 	XGrabServer(dpy);
@@ -411,6 +427,12 @@ static void run(client *clients_head) {
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_Tab) {
 				change_focus(e.xkey.window, clients_head);
 			}
+			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_m) {
+				wm_mode = 1;
+				change_wm_mode(e.xkey.window, 1, clients_head);
+			}
+			else if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_f)
+				wm_mode = 0;
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win){
 			button_press(e.xbutton, clients_head);

@@ -7,6 +7,7 @@ typedef struct client {
 	Window frame;	
 	struct client *next;
 	int ws_num;
+	int w, h;
 } client;
 
 /* function declaration */
