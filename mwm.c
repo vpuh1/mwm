@@ -190,7 +190,8 @@ static void frame(Window w, client *clients_head) {
 		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
 	else {
 		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
-		XResizeWindow(dpy, w, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+		XMoveResizeWindow(dpy, w, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+		XMoveResizeWindow(dpy, frame, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
 	}
 	push_back(clients_head, w, frame, ws_num);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
@@ -376,13 +377,13 @@ static void move_to_ws(int move_to, client *clients_head) {
 	}
 }
 
-static void change_wm_mode(Window w, int mode, client *clients_head) {
+static void change_wm_mode(int mode, client *clients_head) {
 	if(mode == 1) {
 		client *cur = clients_head->next;
 		for(; cur != NULL; cur = cur->next) {
-			if(cur->win == w) {
-				XResizeWindow(dpy, w, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
-				XResizeWindow(dpy, cur->frame, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+			if(cur->ws_num == ws_num && cur->win != root) {
+				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+				XMoveResizeWindow(dpy, cur->frame, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
 			}
 		}
 	}
@@ -465,7 +466,7 @@ static void run(client *clients_head) {
 			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_m) {
 				wm_mode = 1;
-				change_wm_mode(e.xkey.window, 1, clients_head);
+				change_wm_mode(1, clients_head);
 			}
 			else if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_f)
 				wm_mode = 0;
