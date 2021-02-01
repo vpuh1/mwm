@@ -12,9 +12,7 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define BORDER_WIDTH 1
-#define CLEANMASK(mask)         (mask & (ShiftMask|ControlMask|Mod1Mask|Mod2Mask|Mod3Mask|Mod4Mask|Mod5Mask))
-
-char bg[] = "";
+#define CLEANMASK(mask) (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask | Mod4Mask | Mod5Mask))
 
 struct {
 	GC gc;
@@ -25,10 +23,8 @@ struct {
 } bar;
 
 static void open_display();
-static void get_display_resolution();
 static void load_font();
 static void setup_gc();
-static void setup_bar_tags();
 static void create_bar();
 static void draw_bar();
 static void init();
@@ -38,76 +34,68 @@ static void map_request();
 static void destroy_frame();
 
 static int active_tag = 0;
-static Display *dpy;
 static int screen;
-static Window win;
-static Window root;
-static XWindowAttributes attr;
 static int display_width;
 static int display_height;
 static int tag_width[9];
 static int tag_width_sum = 0;
 static int tag_x[9];
 static int tag_y;
-static XFontStruct *font;
+static int ws_num = 0;
+static int num_clients = 0;
+static int prev_tag = -1;
+static Display *dpy;
+static Window win;
+static Window focused_window[10];
+static Window root;
 static GC title_gc;
 static GC bg_gc;
-static int prev_tag = -1;
-static Cursor default_cursor, resize_cursor, move_cursor;
-static int num_clients = 0;
+static Colormap col;
+static XColor accent;
+static XColor bg;
+static XColor fg;
+static Cursor default_cursor;
+static Cursor resize_cursor;
+static Cursor move_cursor;
+static XWindowAttributes attr;
+static XFontStruct *font;
 static XButtonEvent start;
-static int ws_num = 0;
-static Window focused_window[10];
-
-static void init_focused_windows() {
-	for(int i = 0; i < 10; i++){
-		focused_window[i] = root;
-	}
-}
 
 static void open_display()
 {
 	dpy = XOpenDisplay(NULL);
 	if (!dpy) {
-		fprintf (stderr, "Could not open display\n");
+		fprintf (stderr, "mwm: could not open display\n");
 		exit (1);
 	}
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
+	for(int i = 0; i < 10; i++) {
+		focused_window[i] = root;
+	}
 	XSelectInput(dpy, root, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask);
-}
-
-static void get_display_resolution() {
 	display_width = DisplayWidth(dpy, screen);
 	display_height = DisplayHeight(dpy, screen);
-	bar.height = 26;
-	bar.space = 22;
 }
 
 static void setup_gc() {
 	screen = DefaultScreen(dpy);
+	col = DefaultColormap(dpy, 0);
 	bar.gc = XCreateGC(dpy, win, 0, 0);
 	title_gc = XCreateGC(dpy, win, 0, 0);
 	bg_gc = XCreateGC(dpy, win, 0, 0);
-	XColor inactive_bg_color;
-	Colormap colormap1;
-	colormap1 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap1, inactive_bg, &inactive_bg_color);
-	XAllocColor(dpy, colormap1, &inactive_bg_color);
-	XSetBackground(dpy, bar.gc, inactive_bg_color.pixel); 
-	XColor inactive_fg_color;
-	Colormap colormap2;
-	colormap2 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap2, inactive_fg, &inactive_fg_color);
-	XAllocColor(dpy, colormap2, &inactive_fg_color);
-	XSetForeground(dpy, bar.gc, inactive_fg_color.pixel); 
-	XColor active_bg_color;
-	Colormap colormap3;
-	colormap3 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap3, active_bg, &active_bg_color);
-	XAllocColor(dpy, colormap3, &active_bg_color);
-	XSetForeground(dpy, title_gc, active_bg_color.pixel);
-	XSetForeground(dpy, bg_gc, inactive_bg_color.pixel);
+
+	XParseColor(dpy, col, bg_color, &bg);
+	XAllocColor(dpy, col, &bg);
+	XSetBackground(dpy, bar.gc, bg.pixel); 
+	XParseColor(dpy, col, fg_color, &fg);
+	XAllocColor(dpy, col, &fg);
+	XSetForeground(dpy, bar.gc, fg.pixel); 
+	XParseColor(dpy, col, accent_color, &accent);
+	XAllocColor(dpy, col, &accent);
+	XSetForeground(dpy, title_gc, accent.pixel);
+	XSetForeground(dpy, bg_gc, bg.pixel);
+
 	resize_cursor =	XCreateFontCursor(dpy, XC_sizing);
 	default_cursor = XCreateFontCursor(dpy, XC_left_ptr);
 	move_cursor = XCreateFontCursor(dpy, XC_fleur);
@@ -116,6 +104,12 @@ static void setup_gc() {
 
 
 static void create_bar() {
+	bar.height = 26;
+	bar.space = 22;
+	for(int i = 0; i < 9; i++) {
+		bar.text[i] = bar_tags[i];
+		bar.text_len[i] = 1;
+	}
 	win = XCreateSimpleWindow(dpy, root, 0, 0, display_width, bar.height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
 	XSelectInput(dpy, win, StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask );
 	XMapWindow(dpy, win);
@@ -130,14 +124,6 @@ static void load_font() {
 	XSetFont(dpy, bar.gc, font->fid);
 }
 
-
-static void setup_bar_tags() {
-	for(int i = 0; i < 9; i++) {
-		bar.text[i] = bar_tags[i];
-		bar.text_len[i] = 1;
-	}
-}
-
 static void init_bar(){
 	int x;
 	int y;
@@ -146,7 +132,7 @@ static void init_bar(){
 	int descent;
 	XCharStruct overall;
 	for(int i = 0; i < 9; i++){
-		XTextExtents (font, bar.text[i], bar.text_len[i], & direction, & ascent, & descent, & overall);
+		XTextExtents(font, bar.text[i], bar.text_len[i], &direction, &ascent, &descent, &overall);
 		tag_width[i] = overall.width;
 		tag_x[i] = bar.space*i+tag_width_sum;
 		tag_width_sum+=tag_width[i];
@@ -184,13 +170,10 @@ static void draw_bar(int prev, int index) {
 
 static void init() {
 	open_display();
-	get_display_resolution();
 	create_bar();
 	setup_gc();
 	load_font();
-	setup_bar_tags();
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
-	init_focused_windows();
 	init_bar();
 	XFlush(dpy);
 }
@@ -204,20 +187,15 @@ static void frame(Window w, client *clients_head) {
 		current = current->next;
 	}
 	num_clients += 1;
-	XColor border_color;
-	Colormap colormap3;
-	colormap3 = DefaultColormap(dpy, 0);
-	XParseColor(dpy, colormap3, active_bg, &border_color);
-	XAllocColor(dpy, colormap3, &border_color);
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
-	Window frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, border_color.pixel, BlackPixel(dpy, 0));
+	Window frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
 	push_back(clients_head, w, frame, ws_num);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
 	XReparentWindow(dpy, w, frame, 0, 0);
 	XMapWindow(dpy, frame);
-	XGrabButton(dpy, 1, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
-	XGrabButton(dpy, 3, Mod1Mask, w, False, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabButton(dpy, 1, Mod1Mask, w, False, ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+	XGrabButton(dpy, 3, Mod1Mask, w, False, ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabKey(dpy, AnyKey, Mod4Mask, w, True, GrabModeAsync, GrabModeAsync);
 }
 
@@ -363,7 +341,6 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	while(current != NULL) {
 		cnt++;
 		if(current->win == e.window) {
-			//fprintf(stderr, "%d WINDOW %ld FRAME %ld\n", cnt, current->win, current->frame);
 			detected = 1;
 			break;
 		}
@@ -371,7 +348,6 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	}
 	if(!detected)
 		return;
-	//XDestroyWindow(dpy, current->frame);
 	change_focus(e.window, clients_head);
 	XUnmapWindow(dpy, current->frame);
 	XDestroyWindow(dpy, current->frame);
@@ -382,7 +358,7 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 		pop_back(clients_head);
 }
 
-static void change_workspace(client *clients_head) {
+static void change_ws(client *clients_head) {
 	client *current = clients_head->next;
 	while(current != NULL) {
 		if(current->win != root && current->win != win){
@@ -408,7 +384,7 @@ static void change_workspace(client *clients_head) {
 	}
 }
 
-static void move_window_to_ws(int move_to, client *clients_head) {
+static void move_to_ws(int move_to, client *clients_head) {
 	Window focused_win;
 	int revert;
 	XGetInputFocus(dpy, &focused_win, &revert);
@@ -443,7 +419,7 @@ static void run(client *clients_head) {
 	XUngrabServer(dpy);
 	fprintf(stderr, "FUCKING TEST!!!!\n");
 	while (1) {
-		print_list(clients_head);
+		/* print_list(clients_head); */
 		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
@@ -451,16 +427,16 @@ static void run(client *clients_head) {
 			KeySym keysym = XKeycodeToKeysym(dpy, e.xkey.keycode, 0);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
 				for(int i = 0; i < 10; i++) { 
-					if((int)e.xkey.keycode == i+10 && i != ws_num)
-						move_window_to_ws(i, clients_head);
+					if((int)e.xkey.keycode == i + 10 && i != ws_num)
+						move_to_ws(i, clients_head);
 				}
 			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)){
 				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
 					prev_tag = active_tag;
-					active_tag = e.xkey.keycode-10;
+					active_tag = e.xkey.keycode - 10;
 					ws_num = active_tag;
-					change_workspace(clients_head);
+					change_ws(clients_head);
 					draw_bar(prev_tag, active_tag);
 				}
 			}
@@ -476,15 +452,10 @@ static void run(client *clients_head) {
 		}
 		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None && e.xbutton.subwindow != win)
 			button_release(clients_head);
-		if(e.type == MapRequest) {
-			fprintf(stderr, "Map Request for window %ld\n", e.xmaprequest.window);
+		if(e.type == MapRequest)
 			map_request(e.xmaprequest, clients_head);
-		}
-		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win) {
-			printf("Unmap notify!\n");
+		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win)
 			destroy_frame(e.xdestroywindow, clients_head);
-			//fprintf(stderr, "UnmapRequest: %ld\n", e.xunmap.window);
-		}
 		if(e.type == Expose){
 			expose_bar();
 			draw_bar(prev_tag, active_tag);
@@ -498,7 +469,6 @@ int main(int argc, char ** argv){
 	client *clients_head = NULL;
 	clients_head = (client *)malloc(sizeof(client));
 	init();
-	//fprintf(stderr, "ROOT IS %ld\n", root);
 	XGrabButton(dpy, 1, Mod4Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	XGrabButton(dpy, 3, Mod4Mask, DefaultRootWindow(dpy), True, ButtonPressMask|ButtonReleaseMask|PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
 	run(clients_head);
