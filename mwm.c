@@ -224,7 +224,7 @@ static void button_press(XButtonEvent e, client *clients_head) {
 }
 
 static void move_resize_window(XButtonEvent e, client *clients_head) {
-	fprintf(stderr, "MOTION NOTIFY FOR WINDOW %ld\n", start.subwindow);
+	//fprintf(stderr, "MOTION NOTIFY FOR WINDOW %ld\n", start.subwindow);
 	int xdiff = e.x_root - start.x_root;
 	int ydiff = e.y_root - start.y_root;
 	int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
@@ -317,12 +317,15 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 			change_focus(e.window, clients_head);
 			XUnmapWindow(dpy, cur->frame);
 			XDestroyWindow(dpy, cur->frame);
-			num_clients--;
-			if(cnt != num_clients && cnt != 0)
+			if(cnt != num_clients && cnt != 0) {
 				pop(clients_head, cnt);
-			else if(cnt != num_clients) 
+				return;
+			}
+			if(cnt == num_clients) {
 				pop_back(clients_head);
-			return;
+				return;
+			}
+			num_clients--;
 		}
 	}
 }
@@ -384,7 +387,7 @@ static void run(client *clients_head) {
 	XUngrabServer(dpy);
 	fprintf(stderr, "FUCKING TEST!!!!\n");
 	while (1) {
-		/* print_list(clients_head); */
+		print_list(clients_head);
 		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
