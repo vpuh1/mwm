@@ -224,7 +224,7 @@ static void frame(Window w, client *clients_head) {
 static void map_request(XMapRequestEvent e, client *clients_head) {
 	int need_to_map = 1;
 	frame(e.window, clients_head);
-	client *current = clients_head;
+	client *current = clients_head->next;
 	while(current != NULL) {
 		if(current->frame == e.window && current->ws_num != ws_num) {
 			need_to_map = 0;
@@ -253,7 +253,7 @@ static void button_press(XButtonEvent e, client *clients_head) {
 		start = e;
 		XGetWindowAttributes(dpy, start.subwindow, &attr);
 		XRaiseWindow(dpy, start.subwindow);
-		XSetInputFocus(dpy, current->win, RevertToPointerRoot, CurrentTime);
+		XSetInputFocus(dpy, current->win, RevertToNone, CurrentTime);
 		focused_window[ws_num] = current->frame;
 	}
 	else
@@ -323,7 +323,7 @@ static void button_release(client *clients_head) {
 static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	client *current = clients_head->next;
 	int detected = 0;
-	int cnt = -1;
+	int cnt = 0;
 	while(current != NULL) {
 		cnt++;
 		if(current->win == e.window) {
@@ -341,9 +341,7 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 	num_clients--;
 	if(cnt != num_clients && cnt != 0)
 		pop(clients_head, cnt);
-	else if(cnt == 0)
-		pop_front(&clients_head);
-	else if(cnt != -1) 
+	else if(cnt != num_clients) 
 		pop_back(clients_head);
 }
 

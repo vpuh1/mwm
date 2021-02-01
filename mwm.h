@@ -17,9 +17,9 @@ void push(client *head, int index, Window win, Window frame, int ws_num);
 void pop_back(client *head);
 void pop_front(client **head);
 void pop(client *head, int index);
-void change_back(client *head, Window win, Window frame, int ws_num);
-void change_front(client *head, Window win, Window frame, int ws_num);
-void change(client *head, int index, Window win, Window frame, int ws_num);
+//void change_back(client *head, Window win, Window frame, int ws_num);
+//void change_front(client *head, Window win, Window frame, int ws_num);
+//void change(client *head, int index, Window win, Window frame, int ws_num);
 
 /* function implementation */
 void print_list(client *head) {
@@ -108,13 +108,13 @@ void pop(client *head, int index) {
 	current->next = tmp;
 }
 
-void change_front(client *head, Window win, Window frame, int ws_num) {
+/*void change_front(client *head, Window win, Window frame, int ws_num) {
 	head->win = win;
 	head->frame = frame;
 	head->ws_num = ws_num;
-}
+}*/
 
-void change_back(client *head, Window win, Window frame, int ws_num) {
+/*void change_back(client *head, Window win, Window frame, int ws_num) {
 	client *current = head;
 	while(current->next != NULL){
 		current = current->next;
@@ -122,9 +122,9 @@ void change_back(client *head, Window win, Window frame, int ws_num) {
 	current->win = win;
 	current->frame = frame;
 	current->ws_num = ws_num;
-}
+}*/
 
-void change(client *head, int index, Window win, Window frame, int ws_num) {
+/*void change(client *head, int index, Window win, Window frame, int ws_num) {
 	client *current = head;
 	for(int i = 0; i < index-1; i++) {
 		if(current->next != NULL) {
@@ -134,4 +134,4 @@ void change(client *head, int index, Window win, Window frame, int ws_num) {
 	current->next->win = win;
 	current->next->frame = frame;
 	current->next->ws_num = ws_num;
-}
+}*/
