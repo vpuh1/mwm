@@ -40,6 +40,8 @@ static int tag_width[9];
 static int tag_width_sum = 0;
 static int tag_x[9];
 static int tag_y;
+static int tab_width;
+static int tab_height;
 static int ws_num = 0;
 static int num_clients = 0;
 static int prev_tag = -1;
@@ -47,6 +49,7 @@ static Display *dpy;
 static Window win;
 static Window focused_window[10];
 static Window root;
+static Window tabs;
 static GC title_gc;
 static GC bg_gc;
 static Colormap col;
@@ -114,6 +117,12 @@ static void create_bar() {
 	XMapWindow(dpy, win);
 }
 
+static void create_tabs() {
+	tab_width = display_width;
+	tab_height = 18;
+	tabs = XCreateSimpleWindow(dpy, root, 0, bar.height, display_width, tab_height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
+}
+
 static void load_font() {
 	font = XLoadQueryFont(dpy, font_name);
 	if(!font) {
@@ -170,6 +179,7 @@ static void draw_bar(int prev, int index) {
 static void init() {
 	open_display();
 	create_bar();
+	create_tabs();
 	setup_gc();
 	load_font();
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
@@ -178,11 +188,13 @@ static void init() {
 }
 
 static void frame(Window w, client *clients_head) {
+	if(w == tabs)
+		return;
 	for(client *cur = clients_head->next; cur != NULL; cur = cur->next) {
 		if(cur->frame == w)
 			return;
 	}
-	num_clients += 1;
+	num_clients++;
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
 	Window frame;
@@ -381,11 +393,12 @@ static void change_wm_mode(int mode, client *clients_head) {
 	if(mode == 1) {
 		client *cur = clients_head->next;
 		for(; cur != NULL; cur = cur->next) {
-			if(cur->ws_num == ws_num && cur->win != root) {
-				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
-				XMoveResizeWindow(dpy, cur->frame, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+			if(cur->ws_num == ws_num && cur->win != root && cur->win != tabs) {
+				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
+				XMoveResizeWindow(dpy, cur->frame, 0, bar.height+tab_height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 			}
 		}
+		XMapWindow(dpy, tabs);
 	}
 }
 
@@ -479,7 +492,7 @@ static void run(client *clients_head) {
 		}
 		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None && e.xbutton.subwindow != win)
 			button_release(clients_head);
-		if(e.type == MapRequest)
+		if(e.type == MapRequest && e.xmaprequest.window != tabs)
 			map_request(e.xmaprequest, clients_head);
 		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win)
 			destroy_frame(e.xdestroywindow, clients_head);
