@@ -46,6 +46,7 @@ static int active_tab = 0;
 static int tab_height;
 static int ws_num = 0;
 static int num_clients = 0;
+static int prev_num_clients = 0;
 static int prev_tag = -1;
 static Display *dpy;
 static Window win;
@@ -179,21 +180,18 @@ static void draw_bar(int prev, int index) {
 }
 
 static void draw_tabs() {
-	tab_width = display_width / num_clients;
-	GC tmp_gc;
+	tab_x = 0;
+	if(num_clients != 0)
+		tab_width = display_width / num_clients;
+	else tab_width = display_width;
+	XFillRectangle(dpy, tabs, bg_gc, 0, 0, display_width, tab_height);
 	for(int i = 0; i < num_clients - 1; i++) {
 		if(i == active_tab)
-			tmp_gc = title_gc;
-		else
-			tmp_gc = bg_gc;
-		XFillRectangle(dpy, tabs, tmp_gc, tab_x, bar.height, tab_width, tab_height);
+			XFillRectangle(dpy, tabs, title_gc, tab_x, 0, tab_width, tab_height);
 		tab_x += tab_width;
 	}
 	if(num_clients-1 == active_tab)
-		tmp_gc = title_gc;
-	else
-		tmp_gc = bg_gc;
-	XFillRectangle(dpy, tabs, tmp_gc, tab_x, 0, display_width-tab_x, tab_height);
+		XFillRectangle(dpy, tabs, title_gc, tab_x, 0, display_width-tab_x, tab_height);
 
 }
 
@@ -223,8 +221,8 @@ static void frame(Window w, client *clients_head) {
 		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
 	else {
 		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
-		XMoveResizeWindow(dpy, w, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
-		XMoveResizeWindow(dpy, frame, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+		XMoveResizeWindow(dpy, w, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
+		XMoveResizeWindow(dpy, frame, 0, bar.height+tab_height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 	}
 	push_back(clients_head, w, frame, ws_num);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
@@ -243,8 +241,9 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 		}
 	}
 	XMapWindow(dpy, e.window);
-	if(wm_mode == 1)
+	if(wm_mode == 1) {
 		draw_tabs();
+	}
 	XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
 	focused_window[ws_num] = e.window;
 }
@@ -358,6 +357,10 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 			change_focus(e.window, clients_head);
 			XUnmapWindow(dpy, cur->frame);
 			XDestroyWindow(dpy, cur->frame);
+			if(wm_mode == 1) {
+				num_clients--;
+				draw_tabs();
+			}
 			if(cnt != num_clients && cnt != 0) {
 				pop(clients_head, cnt);
 				return;
@@ -366,7 +369,6 @@ static void destroy_frame(XDestroyWindowEvent e, client *clients_head) {
 				pop_back(clients_head);
 				return;
 			}
-			num_clients--;
 		}
 	}
 }
@@ -413,8 +415,8 @@ static void move_to_ws(int move_to, client *clients_head) {
 }
 
 static void change_wm_mode(int mode, client *clients_head) {
+	client *cur = clients_head->next;
 	if(mode == 1) {
-		client *cur = clients_head->next;
 		for(; cur != NULL; cur = cur->next) {
 			if(cur->ws_num == ws_num && cur->win != root && cur->win != tabs) {
 				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
@@ -423,6 +425,14 @@ static void change_wm_mode(int mode, client *clients_head) {
 		}
 		XMapWindow(dpy, tabs);
 		draw_tabs();
+	}
+	else if(mode == 0) {
+		for(; cur != NULL; cur = cur->next) {
+			if(cur->ws_num == ws_num && cur->win != root && cur->win != tabs) {
+				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+				XMoveResizeWindow(dpy, cur->frame, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
+			}
+		}
 	}
 }
 
@@ -442,10 +452,13 @@ static void run(client *clients_head) {
 	fprintf(stderr, "FUCKING TEST!!!!\n");
 	while (1) {
 		print_list(clients_head);
-		fprintf(stderr, "%d %d\n", num_clients, active_tab);
+		fprintf(stderr, "%d\n", active_tab);
 		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
+		if(num_clients == 0) {
+			XUnmapWindow(dpy, tabs);
+		}
 		if(e.type == KeyPress){
 			KeySym keysym = XKeycodeToKeysym(dpy, e.xkey.keycode, 0);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)) {
@@ -481,11 +494,14 @@ static void run(client *clients_head) {
 							pop(clients_head, cnt);
 						if(cnt == num_clients) 
 							pop_back(clients_head);
-						num_clients--;
 						XDestroyWindow(dpy, tmp_win);
 						XDestroyWindow(dpy, tmp_frame);
 						break;
 					}
+				}
+				if(wm_mode == 1) {
+					num_clients--;
+					draw_tabs();
 				}
 				if(!detected)
 					fprintf(stderr, "mwm: could not found frame window, killing window. %ld\n", e.xkey.window);
@@ -500,14 +516,22 @@ static void run(client *clients_head) {
 				}
 			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_Tab) {
+				if(wm_mode == 1) {
+					active_tab++;
+					active_tab %= num_clients;
+					draw_tabs();
+				}
 				change_focus(e.xkey.window, clients_head);
 			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_m) {
 				wm_mode = 1;
 				change_wm_mode(1, clients_head);
 			}
-			else if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_f)
+			else if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_f) {
 				wm_mode = 0;
+				XUnmapWindow(dpy, tabs);
+				change_wm_mode(0, clients_head);
+			}
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win){
 			button_press(e.xbutton, clients_head);
@@ -517,8 +541,13 @@ static void run(client *clients_head) {
 		}
 		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None && e.xbutton.subwindow != win)
 			button_release(clients_head);
-		if(e.type == MapRequest && e.xmaprequest.window != tabs)
+		if(e.type == MapRequest && e.xmaprequest.window != tabs) {
+			if(wm_mode == 1) {
+				XMapWindow(dpy, tabs);
+				draw_tabs();
+			}
 			map_request(e.xmaprequest, clients_head);
+		}
 		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win)
 			destroy_frame(e.xdestroywindow, clients_head);
 		if(e.type == Expose){
@@ -526,6 +555,7 @@ static void run(client *clients_head) {
 			draw_bar(prev_tag, active_tag);
 			XFlush(dpy);
 		}
+		prev_num_clients = num_clients;
 	}
 }
 
