@@ -40,7 +40,9 @@ static int tag_width[9];
 static int tag_width_sum = 0;
 static int tag_x[9];
 static int tag_y;
+static int tab_x = 0;
 static int tab_width;
+static int active_tab = 0;
 static int tab_height;
 static int ws_num = 0;
 static int num_clients = 0;
@@ -176,6 +178,25 @@ static void draw_bar(int prev, int index) {
 	XDrawString(dpy, win, bar.gc, tag_x[index]+bar.space/2, tag_y, bar.text[index], bar.text_len[index]);
 }
 
+static void draw_tabs() {
+	tab_width = display_width / num_clients;
+	GC tmp_gc;
+	for(int i = 0; i < num_clients - 1; i++) {
+		if(i == active_tab)
+			tmp_gc = title_gc;
+		else
+			tmp_gc = bg_gc;
+		XFillRectangle(dpy, tabs, tmp_gc, tab_x, bar.height, tab_width, tab_height);
+		tab_x += tab_width;
+	}
+	if(num_clients-1 == active_tab)
+		tmp_gc = title_gc;
+	else
+		tmp_gc = bg_gc;
+	XFillRectangle(dpy, tabs, tmp_gc, tab_x, 0, display_width-tab_x, tab_height);
+
+}
+
 static void init() {
 	open_display();
 	create_bar();
@@ -222,6 +243,8 @@ static void map_request(XMapRequestEvent e, client *clients_head) {
 		}
 	}
 	XMapWindow(dpy, e.window);
+	if(wm_mode == 1)
+		draw_tabs();
 	XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
 	focused_window[ws_num] = e.window;
 }
@@ -399,6 +422,7 @@ static void change_wm_mode(int mode, client *clients_head) {
 			}
 		}
 		XMapWindow(dpy, tabs);
+		draw_tabs();
 	}
 }
 
@@ -418,6 +442,7 @@ static void run(client *clients_head) {
 	fprintf(stderr, "FUCKING TEST!!!!\n");
 	while (1) {
 		print_list(clients_head);
+		fprintf(stderr, "%d %d\n", num_clients, active_tab);
 		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
