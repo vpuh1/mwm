@@ -1,14 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* linked list */
-typedef struct client {
+/* linked list for clients */
+typedef struct client{
 	Window win;	
 	Window frame;	
 	struct client *next;
 	int ws_num;
 	int w, h;
 } client;
+
+/* struct for tabs in monocle mode */
+typedef struct {
+	int x;
+	int active;
+	int h;
+	int	w; 
+} tab;
+
+struct {
+	GC gc;
+	char text_len[9];
+	char *text[9];
+	int height;
+	int space;
+} bar;
 
 /* function declaration */
 void print_list(client *head);
