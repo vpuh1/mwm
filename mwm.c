@@ -6,7 +6,6 @@
 #include <X11/keysym.h>
 #include <X11/cursorfont.h>
 
-
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define BORDER_WIDTH 1
@@ -106,8 +105,9 @@ static void run();
 static void frame();
 static void map_request();
 static void destroy_frame();
-static void change_ws(int tag);
-static void move_to_ws(int tag);
+static void change_ws(const Arg *arg);
+static void move_to_ws(const Arg *arg);
+static void spawn(const Arg *arg);
 
 #include "config.h"
 
@@ -505,11 +505,11 @@ static void destroy_frame(XDestroyWindowEvent e) {
 	}
 }
 
-static void change_ws(int tag) {
+static void change_ws(const Arg *arg) {
 	Client *cur = chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->win != root && cur->win != win){
-			if(cur->ws_num == tag) {
+			if(cur->ws_num == arg->tag) {
 				XMapWindow(dpy, cur->win);
 				XMapWindow(dpy, cur->frame);
 			}
@@ -519,16 +519,20 @@ static void change_ws(int tag) {
 			}
 		}
 	}
-	XSetInputFocus(dpy, focused_window[tag], RevertToNone, CurrentTime);
+	XSetInputFocus(dpy, focused_window[arg->tag], RevertToNone, CurrentTime);
 	for(cur = chead->next; cur != NULL; cur = cur->next) {
-		if(cur->win == focused_window[tag] && focused_window[tag] != root) {
+		if(cur->win == focused_window[arg->tag] && focused_window[arg->tag] != root) {
 			XRaiseWindow(dpy, cur->frame);
-			return;
+			break;
 		}
 	}
+	prev_tag = active_tag;
+	active_tag = arg->tag;
+	ws_num = active_tag;
+	draw_bar(prev_tag, active_tag);
 }
 
-static void move_to_ws(int tag) {
+static void move_to_ws(const Arg *arg) {
 	Window focused_win;
 	int revert;
 	XGetInputFocus(dpy, &focused_win, &revert);
@@ -540,8 +544,8 @@ static void move_to_ws(int tag) {
 			XUnmapWindow(dpy, cur->win);
 			XUnmapWindow(dpy, cur->frame);
 			change_focus(focused_win);
-			cur->ws_num = tag;
-			focused_window[tag] = cur->win;
+			cur->ws_num = arg->tag;
+			focused_window[arg->tag] = cur->win;
 		}
 	}
 }
@@ -568,13 +572,21 @@ static void change_wm_mode(int mode) {
 	}
 }
 
-/*static void keypress(XKeyPressedEvent e) {
+static void spawn(const Arg *arg) { 
+	pid_t pid;
+	pid  = fork();
+	if(pid == 0) {
+		execvp(((char **)arg->name)[0], (char **)arg->name);
+	}
+}
+
+static void keypress(XKeyPressedEvent e) {
 	KeySym keysym = XKeycodeToKeysym(dpy, e.keycode, 0);
 	for(int i = 0; i < LENGTH(keys); i++) {
 		if(keys[i].keysym == keysym && CLEANMASK(keys[i].mod) == CLEANMASK(e.state))
 			keys[i].func(&keys[i].args);
 	}
-}*/
+}
 
 static void run() {
 	XGrabServer(dpy);
@@ -600,7 +612,7 @@ static void run() {
 		}
 		if(e.type == KeyPress){
 			KeySym keysym = XKeycodeToKeysym(dpy, e.xkey.keycode, 0);
-			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)) {
+			/*if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)) {
 				if(keysym == XK_Return) {
 					char *argvv[] = {"st", NULL};
 					pid_t pid;
@@ -609,8 +621,8 @@ static void run() {
 						execvp("st", argvv);
 					}
 				}
-			}
-			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
+			}*/
+			/*if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
 				for(int i = 0; i < 10; i++) { 
 					if((int)e.xkey.keycode == i + 10 && i != ws_num) {
 						move_to_ws(i);
@@ -625,8 +637,8 @@ static void run() {
 					change_ws(ws_num);
 					draw_bar(prev_tag, active_tag);
 				}
-			}
-			//keypress(e.xkey);
+			}*/
+			keypress(e.xkey);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask | ShiftMask)) && keysym == XK_c && e.xkey.window != root && e.xkey.window != win) {
 				int detected = 0;
 				Client *cur = chead->next;
