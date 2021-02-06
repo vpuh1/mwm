@@ -8,9 +8,10 @@ char accent_color[] = "#1E81B0";
 char fg_color[] = "#FFFFFF";
 char bg_color[] = "#21130D";
 
-/*static const char *term_name = "st";*/
+static const char *term_name[]  = { "st", NULL };
 
-/*static Key keys[] = {
+static Key keys[] = {
+	{MODKEY, XK_Return, spawn, {.name = term_name} },
 	{MODKEY, XK_1, change_ws, {.tag = 0} },
 	{MODKEY, XK_2, change_ws, {.tag = 1} },
 	{MODKEY, XK_3, change_ws, {.tag = 2} },
@@ -29,4 +30,4 @@ char bg_color[] = "#21130D";
 	{MODKEY|ShiftMask, XK_7, move_to_ws, {.tag = 6} },
 	{MODKEY|ShiftMask, XK_8, move_to_ws, {.tag = 7} },
 	{MODKEY|ShiftMask, XK_9, move_to_ws, {.tag = 8} },
-};*/
+};
