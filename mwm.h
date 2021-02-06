@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-
 /* linked list for clients */
-typedef struct client{
+typedef struct client {
 	Window win;	
 	Window frame;	
 	struct client *next;
@@ -11,20 +10,32 @@ typedef struct client{
 } client;
 
 /* struct for tabs in monocle mode */
-typedef struct {
+typedef struct tab {
 	int x;
 	int active;
 	int h;
 	int	w; 
 } tab;
 
-struct {
+typedef struct Bar {
 	GC gc;
 	char text_len[9];
 	char *text[9];
 	int height;
 	int space;
-} bar;
+} Bar;
+
+typedef struct Arg {
+	int tag;
+	const void *name;
+} Arg;
+
+typedef struct Key {
+	unsigned int mod;
+	KeySym keysym;
+	void (*func)(const Arg *);
+	const Arg args;
+} Key;
 
 /* function declaration */
 void print_list(client *head);
