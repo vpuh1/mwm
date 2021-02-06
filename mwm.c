@@ -610,7 +610,7 @@ static void run() {
 					}
 				}
 			}
-			/*if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
+			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
 				for(int i = 0; i < 10; i++) { 
 					if((int)e.xkey.keycode == i + 10 && i != ws_num) {
 						Arg *arg;
@@ -629,8 +629,8 @@ static void run() {
 					change_ws(arg);
 					draw_bar(prev_tag, active_tag);
 				}
-			}*/
-			keypress(e.xkey);
+			}
+			//keypress(e.xkey);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask | ShiftMask)) && keysym == XK_c && e.xkey.window != root && e.xkey.window != win) {
 				int detected = 0;
 				Client *cur = chead->next;
