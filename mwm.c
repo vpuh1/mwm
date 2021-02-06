@@ -6,25 +6,53 @@
 #include <X11/keysym.h>
 #include <X11/cursorfont.h>
 
-#include "config.h"
-#include "mwm.h"
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define BORDER_WIDTH 1
 #define CLEANMASK(mask) (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask | Mod4Mask | Mod5Mask))
 
-static void open_display();
-static void load_font();
-static void setup_gc(); static void create_bar();
-static void draw_bar();
-static void init();
-static void run();
-static void frame();
-static void map_request();
-static void destroy_frame();
+/* linked list for clients */
+typedef struct Client {
+	Window win;	
+	Window frame;	
+	struct Client *next;
+	int ws_num;
+	int w, h;
+} Client;
 
-static client *chead = NULL;
+/* struct for tabs in monocle mode */
+typedef struct Tab {
+	int x;
+	int active;
+	int h;
+	int	w; 
+} Tab;
+
+typedef struct Bar {
+	GC gc;
+	char text_len[9];
+	char *text[9];
+	int height;
+	int space;
+} Bar;
+
+typedef struct Arg {
+	int tag;
+	const void *name;
+} Arg;
+
+typedef struct Key {
+	unsigned int mod;
+	KeySym keysym;
+	void (*func)(const Arg *);
+	const Arg args;
+} Key;
+
+static Bar bar;
+static Client *chead = NULL;
+static Tab tab;
+
 static int wm_mode = 0; /* floating mod */
 static int active_tag = 0;
 static int screen;
@@ -59,10 +87,119 @@ static Cursor move_cursor;
 static XWindowAttributes attr;
 static XFontStruct *font;
 static XButtonEvent start;
-static Bar bar;
 
-static void open_display()
-{
+/* function declaration */
+static void print_list(Client *head);
+static void push_back(Client *head, Window win, Window frame, int ws_num);
+static void push_front(Client **head, Window win, Window frame, int ws_num);
+static void push(Client *head, int index, Window win, Window frame, int ws_num);
+static void pop_back(Client *head);
+static void pop_front(Client **head);
+static void pop(Client *head, int index);
+static void open_display();
+static void load_font();
+static void setup_gc(); 
+static void create_bar();
+static void draw_bar();
+static void init();
+static void run();
+static void frame();
+static void map_request();
+static void destroy_frame();
+static void change_ws(const Arg *arg);
+static void move_to_ws(const Arg *arg);
+
+#include "config.h"
+
+/*function implementation */
+void print_list(Client *head) {
+	Client *current = head;
+	while(current != NULL) {
+		fprintf(stderr, "Window: %ld Frame: %ld Workspace: %d", current->win, current->frame, current->ws_num);
+		current = current->next;
+		if(current == NULL) {
+			fprintf(stderr, "\n");
+		}
+	}
+}
+
+void push_back(Client *head, Window win, Window frame, int ws_num) {
+	Client *current = head;
+	while(current->next != NULL) {
+		current = current->next;
+	}
+	current->next = malloc(sizeof(Client));
+	current->next->win = win;
+	current->next->frame = frame;
+	current->next->ws_num = ws_num;
+	current->next->next = NULL;
+}
+
+void push_front(Client **head, Window win, Window frame, int ws_num) {
+	Client *new_node;
+	new_node = malloc(sizeof(Client));
+	new_node->next = *head;
+	new_node->win = win;
+	new_node->frame = frame;
+	new_node->ws_num = ws_num;
+	*head = new_node;
+}
+
+void push(Client *head, int index, Window win, Window frame, int ws_num) {
+	Client *current = head;
+	for(int i = 0; i < index-1; i++) {
+		if(current->next != NULL) {
+			current = current->next;
+		}
+	}
+	if(current->next == NULL || index == 0) {
+		return;
+	}
+	Client *tmp = current->next;
+	current->next = malloc(sizeof(Client));
+	current->next->win = win;
+	current->next->frame = frame;
+	current->next->ws_num = ws_num;
+	current->next->next = tmp;
+}
+
+void pop_back(Client *head) {
+	if(head->next == NULL) {
+		free(head);
+		return;
+	}
+	Client *current = head;
+	while(current->next->next != NULL) {
+		current = current->next;
+	}
+	free(current->next);
+	current->next = NULL;
+}
+
+void pop_front(Client **head) {
+	Client *next_node = NULL;
+	if(head == NULL){
+		return;
+	}
+	next_node = (*head)->next;
+	free(*head);
+	*head = next_node;
+}
+
+void pop(Client *head, int index) {
+	Client *current = head;
+	for(int i = 0; i < index-1; i++){
+		if(current->next != NULL){
+			current = current->next;
+		}
+	}
+	Client *tmp = current->next->next;
+	free(current->next);
+	current->next = tmp;
+}
+
+
+static void open_display() {
 	dpy = XOpenDisplay(NULL);
 	if (!dpy) {
 		fprintf (stderr, "mwm: could not open display\n");
@@ -192,7 +329,7 @@ static void draw_tabs() {
 }
 
 static void init() {
-	chead = (client *)malloc(sizeof(client));
+	chead = (Client *)malloc(sizeof(Client));
 	open_display();
 	create_bar();
 	create_tabs();
@@ -205,7 +342,7 @@ static void init() {
 static void frame(Window w) {
 	if(w == tabs)
 		return;
-	for(client *cur = chead->next; cur != NULL; cur = cur->next) {
+	for(Client *cur = chead->next; cur != NULL; cur = cur->next) {
 		if(cur->frame == w)
 			return;
 	}
@@ -231,7 +368,7 @@ static void frame(Window w) {
 
 static void map_request(XMapRequestEvent e) {
 	frame(e.window);
-	for(client *cur = chead; cur != NULL; cur = cur->next) {
+	for(Client *cur = chead; cur != NULL; cur = cur->next) {
 		if(cur->frame == e.window && cur->ws_num != ws_num) {
 			return;
 		}
@@ -245,7 +382,7 @@ static void map_request(XMapRequestEvent e) {
 }
 
 static void button_press(XButtonEvent e) {
-	client *cur = chead->next;
+	Client *cur = chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->frame == e.subwindow && cur->ws_num == ws_num) {
 			fprintf(stderr, "CLICKED WINDOW: %ld", e.subwindow);
@@ -275,7 +412,7 @@ static void move_resize_window(XButtonEvent e) {
 	else
 		tmp_height = display_height-2*BORDER_WIDTH-attr.y;
 
-	client *cur = chead->next;
+	Client *cur = chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->frame == start.subwindow) {
 			break;
@@ -301,7 +438,7 @@ static void move_resize_window(XButtonEvent e) {
 }
 
 static void button_release() {
-	client *cur= chead->next;
+	Client *cur= chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->frame == start.subwindow && cur->ws_num == ws_num) {
 			XUndefineCursor(dpy, cur->win);
@@ -313,7 +450,7 @@ static void button_release() {
 
 
 void change_focus(Window w) {
-	client *cur = chead->next;
+	Client *cur = chead->next;
 	int detected = 0;
 	for(; cur != NULL; cur = cur->next) {
 		if((cur->win == w || cur->frame == w )&& cur->win != root) {
@@ -344,7 +481,7 @@ void change_focus(Window w) {
 }
 
 static void destroy_frame(XDestroyWindowEvent e) {
-	client *cur = chead->next;
+	Client *cur = chead->next;
 	int cnt = 0;
 	for(; cur != NULL; cur = cur->next) {
 		cnt++;
@@ -368,11 +505,11 @@ static void destroy_frame(XDestroyWindowEvent e) {
 	}
 }
 
-static void change_ws(int tag) {
-	client *cur = chead->next;
+static void change_ws(const Arg *arg) {
+	Client *cur = chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->win != root && cur->win != win){
-			if(cur->ws_num == tag) {
+			if(cur->ws_num == arg->tag) {
 				XMapWindow(dpy, cur->win);
 				XMapWindow(dpy, cur->frame);
 			}
@@ -382,35 +519,35 @@ static void change_ws(int tag) {
 			}
 		}
 	}
-	XSetInputFocus(dpy, focused_window[tag], RevertToNone, CurrentTime);
+	XSetInputFocus(dpy, focused_window[arg->tag], RevertToNone, CurrentTime);
 	for(cur = chead->next; cur != NULL; cur = cur->next) {
-		if(cur->win == focused_window[tag] && focused_window[tag] != root) {
+		if(cur->win == focused_window[arg->tag] && focused_window[arg->tag] != root) {
 			XRaiseWindow(dpy, cur->frame);
 			return;
 		}
 	}
 }
 
-static void move_to_ws(int tag) {
+static void move_to_ws(const Arg *arg) {
 	Window focused_win;
 	int revert;
 	XGetInputFocus(dpy, &focused_win, &revert);
 	if(focused_win == root || focused_win == None || focused_win == win)
 		return;
-	client *cur= chead->next;
+	Client *cur = chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->win == focused_win || cur->frame == focused_win) {
 			XUnmapWindow(dpy, cur->win);
 			XUnmapWindow(dpy, cur->frame);
 			change_focus(focused_win);
-			cur->ws_num = tag;
-			focused_window[tag] = cur->win;
+			cur->ws_num = arg->tag;
+			focused_window[arg->tag] = cur->win;
 		}
 	}
 }
 
 static void change_wm_mode(int mode) {
-	client *cur = chead->next;
+	Client *cur = chead->next;
 	if(mode == 1) {
 		for(; cur != NULL; cur = cur->next) {
 			if(cur->ws_num == ws_num && cur->win != root && cur->win != tabs) {
@@ -431,13 +568,13 @@ static void change_wm_mode(int mode) {
 	}
 }
 
-/*static void keypress(XKeyPressedEvent e) {
+static void keypress(XKeyPressedEvent e) {
 	KeySym keysym = XKeycodeToKeysym(dpy, e.keycode, 0);
 	for(int i = 0; i < LENGTH(keys); i++) {
 		if(keys[i].keysym == keysym && CLEANMASK(keys[i].mod) == CLEANMASK(e.state))
 			keys[i].func(&keys[i].args);
 	}
-}*/
+}
 
 static void run() {
 	XGrabServer(dpy);
@@ -473,15 +610,30 @@ static void run() {
 					}
 				}
 			}
-			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
+			/*if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask|ShiftMask))) {
 				for(int i = 0; i < 10; i++) { 
-					if((int)e.xkey.keycode == i + 10 && i != ws_num)
-						move_to_ws(i);
+					if((int)e.xkey.keycode == i + 10 && i != ws_num) {
+						Arg *arg;
+						arg->tag = i;
+						move_to_ws(arg);
+					}
 				}
 			}
+			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)){
+				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
+					prev_tag = active_tag;
+					active_tag = e.xkey.keycode - 10;
+					ws_num = active_tag;
+					Arg *arg;
+					arg->tag = ws_num;
+					change_ws(arg);
+					draw_bar(prev_tag, active_tag);
+				}
+			}*/
+			keypress(e.xkey);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask | ShiftMask)) && keysym == XK_c && e.xkey.window != root && e.xkey.window != win) {
 				int detected = 0;
-				client *cur = chead->next;
+				Client *cur = chead->next;
 				int cnt = 0;
 				for(; cur != NULL; cur = cur->next) {
 					cnt++;
@@ -509,15 +661,6 @@ static void run() {
 				}
 				if(!detected)
 					fprintf(stderr, "mwm: could not found frame window, killing window. %ld\n", e.xkey.window);
-			}
-			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask)){
-				if(e.xkey.keycode >= 10 && e.xkey.keycode <= 19) {
-					prev_tag = active_tag;
-					active_tag = e.xkey.keycode - 10;
-					ws_num = active_tag;
-					change_ws(ws_num);
-					draw_bar(prev_tag, active_tag);
-				}
 			}
 			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_Tab) {
 				if(wm_mode == 1) {
