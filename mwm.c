@@ -39,6 +39,7 @@ typedef struct Bar {
 typedef struct Arg {
 	int tag;
 	const void *name;
+	int i;
 } Arg;
 
 typedef struct Key {
@@ -108,7 +109,9 @@ static void destroy_frame();
 static void change_ws(const Arg *arg);
 static void move_to_ws(const Arg *arg);
 static void spawn(const Arg *arg);
-
+static void change_focus(const Arg *arg);
+static void destroy_window(const Arg *arg);
+static void change_wm_mode(const Arg *arg);
 #include "config.h"
 
 /*function implementation */
@@ -449,7 +452,13 @@ static void button_release() {
 }
 
 
-void change_focus(Window w) {
+void change_focus(const Arg *arg) {
+	Window w = focused_window[ws_num];
+	if(wm_mode == 1) {
+		active_tab++;
+		active_tab %= num_clients;
+		draw_tabs();
+	}
 	Client *cur = chead->next;
 	int detected = 0;
 	for(; cur != NULL; cur = cur->next) {
@@ -486,7 +495,9 @@ static void destroy_frame(XDestroyWindowEvent e) {
 	for(; cur != NULL; cur = cur->next) {
 		cnt++;
 		if(cur->win == e.window) {
-			change_focus(e.window);
+			Arg *tmp_arg;
+			tmp_arg-> i = 1;
+			change_focus(tmp_arg);
 			XUnmapWindow(dpy, cur->frame);
 			XDestroyWindow(dpy, cur->frame);
 			if(wm_mode == 1) {
@@ -543,26 +554,30 @@ static void move_to_ws(const Arg *arg) {
 		if(cur->win == focused_win || cur->frame == focused_win) {
 			XUnmapWindow(dpy, cur->win);
 			XUnmapWindow(dpy, cur->frame);
-			change_focus(focused_win);
+			Arg *tmp_arg;
+			tmp_arg-> i = 1;
+			change_focus(tmp_arg);
 			cur->ws_num = arg->tag;
 			focused_window[arg->tag] = cur->win;
 		}
 	}
 }
 
-static void change_wm_mode(int mode) {
+static void change_wm_mode(const Arg *arg) {
+	wm_mode = arg->i;
 	Client *cur = chead->next;
-	if(mode == 1) {
+	if(arg->i == 1) {
+		XMapWindow(dpy, tabs);
 		for(; cur != NULL; cur = cur->next) {
 			if(cur->ws_num == ws_num && cur->win != root && cur->win != tabs) {
 				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 				XMoveResizeWindow(dpy, cur->frame, 0, bar.height+tab_height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 			}
 		}
-		XMapWindow(dpy, tabs);
 		draw_tabs();
 	}
-	else if(mode == 0) {
+	else if(arg->i == 0) {
+		XUnmapWindow(dpy, tabs);
 		for(; cur != NULL; cur = cur->next) {
 			if(cur->ws_num == ws_num && cur->win != root && cur->win != tabs) {
 				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH);
@@ -586,6 +601,42 @@ static void keypress(XKeyPressedEvent e) {
 		if(keys[i].keysym == keysym && CLEANMASK(keys[i].mod) == CLEANMASK(e.state))
 			keys[i].func(&keys[i].args);
 	}
+}
+
+static void destroy_window(const Arg *arg) {
+	if(focused_window[ws_num] == root || focused_window[ws_num] == win)
+		return;
+	int detected = 0;
+	Client *cur = chead->next;
+	int cnt = 0;
+	for(; cur != NULL; cur = cur->next) {
+		cnt++;
+		if(cur->win == focused_window[ws_num] || cur->frame == focused_window[ws_num]) {
+			detected = 1;
+			Window tmp_frame = cur->frame;
+			Window tmp_win = cur->win;
+			XUnmapWindow(dpy, cur->win);
+			XUnmapWindow(dpy, cur->frame);
+			Arg *tmp_arg;
+			tmp_arg->i = 1;
+			change_focus(tmp_arg);
+			if(cnt != num_clients && cnt != 0)
+				pop(chead, cnt);
+			if(cnt == num_clients) 
+				pop_back(chead);
+			XDestroyWindow(dpy, tmp_win);
+			XDestroyWindow(dpy, tmp_frame);
+			break;
+		}
+	}
+	if(wm_mode == 1) {
+		num_clients--;
+		if(active_tab == num_clients)
+			active_tab--;
+		draw_tabs();
+	}
+	if(!detected)
+		fprintf(stderr, "mwm: could not found frame window, killing window. %ld\n", focused_window[ws_num]);
 }
 
 static void run() {
@@ -640,6 +691,8 @@ static void run() {
 			}*/
 			keypress(e.xkey);
 			if(CLEANMASK(e.xkey.state) == CLEANMASK((Mod4Mask | ShiftMask)) && keysym == XK_c && e.xkey.window != root && e.xkey.window != win) {
+				if(focused_window[ws_num] == root || focused_window[ws_num] == win)
+					return;
 				int detected = 0;
 				Client *cur = chead->next;
 				int cnt = 0;
@@ -651,7 +704,9 @@ static void run() {
 						Window tmp_win = cur->win;
 						XUnmapWindow(dpy, cur->win);
 						XUnmapWindow(dpy, cur->frame);
-						change_focus(tmp_win);
+						Arg *tmp_arg;
+						tmp_arg-> i = 1;
+						change_focus(tmp_arg);
 						if(cnt != num_clients && cnt != 0)
 							pop(chead, cnt);
 						if(cnt == num_clients) 
@@ -670,23 +725,15 @@ static void run() {
 				if(!detected)
 					fprintf(stderr, "mwm: could not found frame window, killing window. %ld\n", e.xkey.window);
 			}
-			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_Tab) {
-				if(wm_mode == 1) {
-					active_tab++;
-					active_tab %= num_clients;
-					draw_tabs();
-				}
+			/*if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_Tab) {
 				change_focus(e.xkey.window);
-			}
-			if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_m) {
-				wm_mode = 1;
+			}*/
+			/*if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_m) {
 				change_wm_mode(1);
 			}
 			else if(CLEANMASK(e.xkey.state) == CLEANMASK(Mod4Mask) && keysym == XK_f) {
-				wm_mode = 0;
-				XUnmapWindow(dpy, tabs);
 				change_wm_mode(0);
-			}
+			}*/
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win && wm_mode != 1){
 			button_press(e.xbutton);
