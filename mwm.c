@@ -73,7 +73,6 @@ static int tab_width;
 static int active_tab = 0;
 static int tab_height;
 static int num_clients = 0;
-static int prev_num_clients = 0;
 static Display *dpy;
 static Window win;
 static Window focused_window[10];
@@ -115,7 +114,7 @@ static void move_to_ws(const Arg *arg);
 static void spawn(const Arg *arg);
 static void change_focus(const Arg *arg);
 static void destroy_window(const Arg *arg);
-static void change_wm_mode(const Arg *arg);
+static void change_mode(const Arg *arg);
 
 #include "config.h"
 
@@ -309,6 +308,7 @@ static void expose_bar() {
 	for(int i = 0; i < 9; i++){
 		XDrawString(dpy, win, bar.gc, tag_x[i]+bar.space/2, tag_y, bar.text[i], bar.text_len[i]);
 	}
+	draw_bar(tag.prev, tag.cur);
 }
 
 static void draw_bar(int prev, int index) {
@@ -336,6 +336,26 @@ static void draw_tabs() {
 
 }
 
+static void unmap_tabs() {
+	if(num_clients == 0)
+		XUnmapWindow(dpy, tabs);
+}
+
+static void init_windows() {
+	XGrabServer(dpy);
+	Window rroot, rparent;
+	Window *tmp_win;
+	unsigned int tmp_n = 0;
+	XQueryTree(dpy, root, &rroot, &rparent, &tmp_win, &tmp_n);
+	for(unsigned int i = 0; i < tmp_n; i++) {
+		if(tmp_win[i] != win && tmp_win[i] != root) {
+			frame(tmp_win[i]);
+		}
+	}
+	XFree(tmp_win);
+	XUngrabServer(dpy);
+}
+
 static void init() {
 	chead = (Client *)malloc(sizeof(Client));
 	tmp_arg = (Arg *)malloc(sizeof(Arg));
@@ -349,6 +369,7 @@ static void init() {
 	load_font();
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
 	init_bar();
+	init_windows();
 }
 
 static void frame(Window w) {
@@ -522,6 +543,7 @@ static void destroy_frame(XDestroyWindowEvent e) {
 			}
 		}
 	}
+	unmap_tabs();
 }
 
 static void change_ws(const Arg *arg) {
@@ -568,7 +590,7 @@ static void move_to_ws(const Arg *arg) {
 	}
 }
 
-static void change_wm_mode(const Arg *arg) {
+static void change_mode(const Arg *arg) {
 	tag.mode = arg->i;
 	Client *cur = chead->next;
 	if(arg->i == 1) {
@@ -639,34 +661,15 @@ static void destroy_window(const Arg *arg) {
 			active_tab--;
 		draw_tabs();
 	}
-	if(!detected)
-		fprintf(stderr, "mwm: could not found frame window, killing window. %ld\n", focused_window[tag.cur]);
+	unmap_tabs();
 }
 
 static void run() {
-	XGrabServer(dpy);
-	Window returned_root, returned_parent;
-	Window *top_level_windows;
-	unsigned int num_top_level_windows = 0;
-	XQueryTree(dpy, root, &returned_root, &returned_parent, &top_level_windows, &num_top_level_windows);
-	for(unsigned int i = 0; i < num_top_level_windows; i++) {
-		if(top_level_windows[i] != win && top_level_windows[i] != root) {
-			frame(top_level_windows[i]);
-		}
-	}
-	XFree(top_level_windows);
-	XUngrabServer(dpy);
 	while (1) {
 		print_list(chead);
-		fprintf(stderr, "%d\n", active_tab);
-		XDefineCursor(dpy, root, default_cursor);
 		XEvent e;
 		XNextEvent (dpy, &e);
-		if(num_clients == 0) {
-			XUnmapWindow(dpy, tabs);
-		}
 		if(e.type == KeyPress){
-			KeySym keysym = XKeycodeToKeysym(dpy, e.xkey.keycode, 0);
 			key_press(e.xkey);
 		}
 		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win && tag.mode != 1){
@@ -688,10 +691,7 @@ static void run() {
 			destroy_frame(e.xdestroywindow);
 		if(e.type == Expose){
 			expose_bar();
-			draw_bar(tag.prev, tag.cur);
-			XFlush(dpy);
 		}
-		prev_num_clients = num_clients;
 	}
 }
 

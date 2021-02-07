@@ -31,7 +31,7 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask, XK_9, move_to_ws, {.tag = 8} },
 	{ MODKEY, XK_Return, spawn, {.name = term_name} },
 	{ MODKEY, XK_Tab, change_focus, {.i = 1} },
-	{ MODKEY, XK_m, change_wm_mode, {.i = 1} },
-	{ MODKEY, XK_f, change_wm_mode, {.i = 0} },
+	{ MODKEY, XK_m, change_mode, {.i = 1} },
+	{ MODKEY, XK_f, change_mode, {.i = 0} },
 	{ MODKEY|ShiftMask, XK_c, destroy_window, {.i = 0} },
 };
