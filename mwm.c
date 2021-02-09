@@ -13,8 +13,8 @@
 
 /* linked list for clients */
 typedef struct Client {
-	Window win;	
-	Window frame;	
+	Window win;
+	Window frame;
 	struct Client *next;
 	int tag;
 	int w, h;
@@ -56,10 +56,10 @@ typedef struct Tag {
 } Tag;
 
 static Bar bar;
-static Client *chead = NULL;
 static Tab tab;
-static Arg *tmp_arg = NULL;
 static Tag tag;
+static Client *chead = NULL;
+static Arg *tmp_arg = NULL;
 
 static int screen;
 static int display_width;
@@ -232,12 +232,12 @@ static void setup_gc() {
 
 	XParseColor(dpy, col, bg_color, &bg);
 	XAllocColor(dpy, col, &bg);
-	XSetBackground(dpy, bar.gc, bg.pixel); 
 	XParseColor(dpy, col, fg_color, &fg);
 	XAllocColor(dpy, col, &fg);
-	XSetForeground(dpy, bar.gc, fg.pixel); 
 	XParseColor(dpy, col, accent_color, &accent);
 	XAllocColor(dpy, col, &accent);
+	XSetBackground(dpy, bar.gc, bg.pixel); 
+	XSetForeground(dpy, bar.gc, fg.pixel); 
 	XSetForeground(dpy, title_gc, accent.pixel);
 	XSetForeground(dpy, bg_gc, bg.pixel);
 
@@ -400,6 +400,10 @@ static void frame(Window w) {
 }
 
 static void map_request(XMapRequestEvent e) {
+	if(tag.mode == 1) {
+		XMapWindow(dpy, tabs);
+		draw_tabs();
+	}
 	frame(e.window);
 	for(Client *cur = chead; cur != NULL; cur = cur->next) {
 		if(cur->frame == e.window && cur->tag != tag.cur) {
@@ -407,18 +411,18 @@ static void map_request(XMapRequestEvent e) {
 		}
 	}
 	XMapWindow(dpy, e.window);
-	if(tag.mode == 1) {
-		draw_tabs();
-	}
 	XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
 	focused_window[tag.cur] = e.window;
 }
 
 static void button_press(XButtonEvent e) {
+	Window swin = e.subwindow;
+	if(swin == None || swin == root || swin == win || tag.mode == 1)
+		return;
 	Client *cur = chead->next;
 	for(; cur != NULL; cur = cur->next) {
-		if(cur->frame == e.subwindow && cur->tag == tag.cur) {
-			fprintf(stderr, "CLICKED WINDOW: %ld", e.subwindow);
+		if(cur->frame == swin && cur->tag == tag.cur) {
+			fprintf(stderr, "CLICKED WINDOW: %ld", swin);
 			start = e;
 			XGetWindowAttributes(dpy, start.subwindow, &attr);
 			XRaiseWindow(dpy, start.subwindow);
@@ -430,6 +434,9 @@ static void button_press(XButtonEvent e) {
 }
 
 static void move_resize_window(XButtonEvent e) {
+	Window swin = start.subwindow;
+	if(swin == None || swin == root || swin == win || tag.mode == 1)
+		return;
 	int xdiff = e.x_root - start.x_root;
 	int ydiff = e.y_root - start.y_root;
 	int check_width = MAX(1, attr.width + (start.button == 3 ? xdiff : 0));
@@ -470,7 +477,10 @@ static void move_resize_window(XButtonEvent e) {
 	XResizeWindow(dpy, cur->win, tmp_width, tmp_height);
 }
 
-static void button_release() {
+static void button_release(XButtonEvent e) {
+	Window swin = e.subwindow;
+	if(swin == None || swin == root || swin == win || tag.mode == 1)
+		return;
 	Client *cur= chead->next;
 	for(; cur != NULL; cur = cur->next) {
 		if(cur->frame == start.subwindow && cur->tag == tag.cur) {
@@ -520,6 +530,8 @@ void change_focus(const Arg *arg) {
 }
 
 static void destroy_frame(XDestroyWindowEvent e) {
+	if(e.window == None || e.window == root || e.window == win)
+		return;
 	Client *cur = chead->next;
 	int cnt = 0;
 	for(; cur != NULL; cur = cur->next) {
@@ -572,6 +584,8 @@ static void change_ws(const Arg *arg) {
 }
 
 static void move_to_ws(const Arg *arg) {
+	if(arg->tag == tag.cur)
+		return;
 	Window focused_win;
 	int revert;
 	XGetInputFocus(dpy, &focused_win, &revert);
@@ -669,28 +683,29 @@ static void run() {
 		print_list(chead);
 		XEvent e;
 		XNextEvent (dpy, &e);
-		if(e.type == KeyPress){
-			key_press(e.xkey);
-		}
-		if(e.type == ButtonPress && e.xbutton.subwindow != None && e.xbutton.subwindow != root && e.xbutton.subwindow != win && tag.mode != 1){
-			button_press(e.xbutton);
-		}
-		if(e.type == MotionNotify && start.subwindow != None && start.subwindow != win && start.subwindow != root && tag.mode != 1) {
-			move_resize_window(e.xbutton);
-		}
-		else if(e.type == ButtonRelease && e.xbutton.subwindow != None && e.xbutton.subwindow != None && e.xbutton.subwindow != win && tag.mode != 1)
-			button_release(chead);
-		if(e.type == MapRequest && e.xmaprequest.window != tabs) {
-			if(tag.mode == 1) {
-				XMapWindow(dpy, tabs);
-				draw_tabs();
-			}
-			map_request(e.xmaprequest);
-		}
-		else if(e.type == DestroyNotify && e.xdestroywindow.window != root && e.xdestroywindow.window != win)
-			destroy_frame(e.xdestroywindow);
-		if(e.type == Expose){
-			expose_bar();
+		switch(e.type){
+			case KeyPress:
+				key_press(e.xkey);
+				break;
+			case ButtonPress:
+				button_press(e.xbutton);
+				break;
+			case MotionNotify:
+				move_resize_window(e.xbutton);
+				break;
+			case ButtonRelease:
+				button_release(e.xbutton);
+				break;
+			case MapRequest:
+				if(e.xmaprequest.window != tabs) {
+					map_request(e.xmaprequest);
+				}
+				break;
+			case DestroyNotify:
+				destroy_frame(e.xdestroywindow);
+				break;
+			case Expose:
+				expose_bar();
 		}
 	}
 }
