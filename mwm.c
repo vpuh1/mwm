@@ -24,7 +24,6 @@ typedef struct Client {
 typedef struct Tab {
 	int x;
 	int active;
-	int h;
 	int	w; 
 } Tab;
 
@@ -72,7 +71,8 @@ static int tab_x = 0;
 static int tab_width;
 static int active_tab = 0;
 static int tab_height;
-static int num_clients = 0;
+static int num_clients[9];
+static int mode[9];
 static Display *dpy;
 static Window win;
 static Window focused_window[10];
@@ -322,22 +322,23 @@ static void draw_bar(int prev, int index) {
 
 static void draw_tabs() {
 	tab_x = 0;
-	if(num_clients != 0)
-		tab_width = display_width / num_clients;
-	else tab_width = display_width;
+	if(num_clients[tag.cur] != 0)
+		tab_width = display_width / num_clients[tag.cur];
+	else
+		tab_width = display_width;
 	XFillRectangle(dpy, tabs, bg_gc, 0, 0, display_width, tab_height);
-	for(int i = 0; i < num_clients - 1; i++) {
+	for(int i = 0; i < num_clients[tag.cur] - 1; i++) {
 		if(i == active_tab)
 			XFillRectangle(dpy, tabs, title_gc, tab_x, 0, tab_width, tab_height);
 		tab_x += tab_width;
 	}
-	if(num_clients-1 == active_tab)
+	if(num_clients[tag.cur] - 1 == active_tab)
 		XFillRectangle(dpy, tabs, title_gc, tab_x, 0, display_width-tab_x, tab_height);
 
 }
 
 static void unmap_tabs() {
-	if(num_clients == 0)
+	if(num_clients[tag.cur] == 0)
 		XUnmapWindow(dpy, tabs);
 }
 
@@ -379,7 +380,7 @@ static void frame(Window w) {
 		if(cur->frame == w)
 			return;
 	}
-	num_clients++;
+	num_clients[tag.cur]++;
 	XWindowAttributes attr;
 	XGetWindowAttributes(dpy, w, &attr);
 	Window frame;
@@ -496,7 +497,7 @@ void change_focus(const Arg *arg) {
 	Window w = focused_window[tag.cur];
 	if(tag.mode == 1) {
 		active_tab++;
-		active_tab %= num_clients;
+		active_tab %= num_clients[tag.cur];
 		draw_tabs();
 	}
 	Client *cur = chead->next;
@@ -542,14 +543,14 @@ static void destroy_frame(XDestroyWindowEvent e) {
 			XUnmapWindow(dpy, cur->frame);
 			XDestroyWindow(dpy, cur->frame);
 			if(tag.mode == 1) {
-				num_clients--;
+				num_clients[tag.cur]--;
 				draw_tabs();
 			}
-			if(cnt != num_clients && cnt != 0) {
+			if(cnt != num_clients[tag.cur] && cnt != 0) {
 				pop(chead, cnt);
 				return;
 			}
-			if(cnt == num_clients) {
+			if(cnt == num_clients[tag.cur]) {
 				pop_back(chead);
 				return;
 			}
@@ -580,6 +581,16 @@ static void change_ws(const Arg *arg) {
 	}
 	tag.prev = tag.cur;
 	tag.cur = arg->tag;
+	tag.mode = mode[tag.cur];
+	unmap_tabs();
+	if(tag.mode == 0)
+		XUnmapWindow(dpy, tabs);
+	else if(tag.mode == 1) {
+		if(num_clients[tag.cur] > 0) {
+			XMapWindow(dpy, tabs);
+			draw_tabs();
+		}
+	}
 	draw_bar(tag.prev, tag.cur);
 }
 
@@ -605,7 +616,8 @@ static void move_to_ws(const Arg *arg) {
 }
 
 static void change_mode(const Arg *arg) {
-	tag.mode = arg->i;
+	mode[tag.cur] = arg->i;
+	tag.mode = mode[tag.cur];
 	Client *cur = chead->next;
 	if(arg->i == 1) {
 		XMapWindow(dpy, tabs);
@@ -660,9 +672,9 @@ static void destroy_window(const Arg *arg) {
 			XUnmapWindow(dpy, cur->frame);
 			tmp_arg->i = 1;
 			change_focus(tmp_arg);
-			if(cnt != num_clients && cnt != 0)
+			if(cnt != num_clients[tag.cur] && cnt != 0)
 				pop(chead, cnt);
-			else if(cnt == num_clients) 
+			else if(cnt == num_clients[tag.cur]) 
 				pop_back(chead);
 			XDestroyWindow(dpy, tmp_win);
 			XDestroyWindow(dpy, tmp_frame);
@@ -670,8 +682,8 @@ static void destroy_window(const Arg *arg) {
 		}
 	}
 	if(tag.mode == 1) {
-		num_clients--;
-		if(active_tab == num_clients)
+		num_clients[tag.cur]--;
+		if(active_tab == num_clients[tag.cur])
 			active_tab--;
 		draw_tabs();
 	}
