@@ -16,6 +16,7 @@ typedef struct Client {
 	Window win;
 	Window frame;
 	struct Client *next;
+	struct Client *prev;
 	int tag;
 	int w, h;
 } Client;
@@ -112,7 +113,8 @@ static void destroy_frame();
 static void change_ws(const Arg *arg);
 static void move_to_ws(const Arg *arg);
 static void spawn(const Arg *arg);
-static void change_focus(const Arg *arg);
+static void change_focus_front(const Arg *arg);
+static void change_focus_back(const Arg *arg);
 static void destroy_window(const Arg *arg);
 static void change_mode(const Arg *arg);
 
@@ -140,12 +142,14 @@ void push_back(Client *head, Window win, Window frame, int tag) {
 	cur->next->frame = frame;
 	cur->next->tag = tag;
 	cur->next->next = NULL;
+	cur->next->prev = cur;
 }
 
 void push_front(Client **head, Window win, Window frame, int tag) {
 	Client *new_node;
 	new_node = malloc(sizeof(Client));
 	new_node->next = *head;
+	(*head)->prev = new_node;
 	new_node->win = win;
 	new_node->frame = frame;
 	new_node->tag = tag;
@@ -164,10 +168,12 @@ void push(Client *head, int index, Window win, Window frame, int tag) {
 	}
 	Client *tmp = cur->next;
 	cur->next = malloc(sizeof(Client));
+	cur->next->prev = cur;
 	cur->next->win = win;
 	cur->next->frame = frame;
 	cur->next->tag = tag;
 	cur->next->next = tmp;
+	tmp->prev = cur->next;
 }
 
 void pop_back(Client *head) {
@@ -189,6 +195,7 @@ void pop_front(Client **head) {
 		return;
 	}
 	next_node = (*head)->next;
+	(*head)->next->prev = NULL;
 	free(*head);
 	*head = next_node;
 }
@@ -203,6 +210,7 @@ void pop(Client *head, int index) {
 	Client *tmp = cur->next->next;
 	free(cur->next);
 	cur->next = tmp;
+	cur->next->prev = cur;
 }
 
 
@@ -401,10 +409,6 @@ static void frame(Window w) {
 }
 
 static void map_request(XMapRequestEvent e) {
-	if(tag.mode == 1) {
-		XMapWindow(dpy, tabs);
-		draw_tabs();
-	}
 	frame(e.window);
 	for(Client *cur = chead; cur != NULL; cur = cur->next) {
 		if(cur->frame == e.window && cur->tag != tag.cur) {
@@ -414,6 +418,11 @@ static void map_request(XMapRequestEvent e) {
 	XMapWindow(dpy, e.window);
 	XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
 	focused_window[tag.cur] = e.window;
+	if(tag.mode == 1) {
+		XMapWindow(dpy, tabs);
+		active_tab++;
+		draw_tabs();
+	}
 }
 
 static void button_press(XButtonEvent e) {
@@ -492,8 +501,40 @@ static void button_release(XButtonEvent e) {
 	}
 }
 
+static void change_focus_back(const Arg *arg) {
+	Window w = focused_window[tag.cur];
+	if(tag.mode == 1) {
+		active_tab--;
+		if(active_tab < 0)
+			active_tab += num_clients[tag.cur];
+		active_tab %= num_clients[tag.cur];
+		draw_tabs();
+	}
+	Client *cur = chead->next;
+	int detected = 0;
+	for(cur = chead->next; cur != NULL; cur = cur->next) {
+		if(cur->tag == tag.cur && cur->win != w && cur->frame != w && cur->win != root) {
+			XSetInputFocus(dpy, cur->win, RevertToParent, CurrentTime);
+			focused_window[tag.cur] = cur->win;
+			XRaiseWindow(dpy, cur->frame);
+			return;
+		}
+	}
+	for(; cur != NULL; cur = cur->next) {
+		if((cur->win == w || cur->frame == w) && cur->win != root)
+			detected = 1;
+		else if(cur->tag == tag.cur && detected && cur->win != root) {
+			XSetInputFocus(dpy, cur->win, RevertToParent, CurrentTime);
+			focused_window[tag.cur] = cur->win;
+			XRaiseWindow(dpy, cur->frame);
+			return;
+		}
+	}
+	XSetInputFocus(dpy, root, RevertToNone, CurrentTime);
+	focused_window[tag.cur] = root;
+}
 
-void change_focus(const Arg *arg) {
+static void change_focus_front(const Arg *arg) {
 	Window w = focused_window[tag.cur];
 	if(tag.mode == 1) {
 		active_tab++;
@@ -503,9 +544,8 @@ void change_focus(const Arg *arg) {
 	Client *cur = chead->next;
 	int detected = 0;
 	for(; cur != NULL; cur = cur->next) {
-		if((cur->win == w || cur->frame == w )&& cur->win != root) {
+		if((cur->win == w || cur->frame == w) && cur->win != root)
 			detected = 1;
-		}
 		else if(cur->tag == tag.cur && detected && cur->win != root) {
 			XSetInputFocus(dpy, cur->win, RevertToParent, CurrentTime);
 			focused_window[tag.cur] = cur->win;
@@ -539,7 +579,10 @@ static void destroy_frame(XDestroyWindowEvent e) {
 		cnt++;
 		if(cur->win == e.window) {
 			tmp_arg->i = 1;
-			change_focus(tmp_arg);
+			if(cnt == num_clients[tag.cur])
+				change_focus_back(tmp_arg);
+			else 
+				change_focus_front(tmp_arg);
 			XUnmapWindow(dpy, cur->frame);
 			XDestroyWindow(dpy, cur->frame);
 			if(tag.mode == 1) {
@@ -608,7 +651,7 @@ static void move_to_ws(const Arg *arg) {
 			XUnmapWindow(dpy, cur->win);
 			XUnmapWindow(dpy, cur->frame);
 			tmp_arg->i = 1;
-			change_focus(tmp_arg);
+			change_focus_front(tmp_arg);
 			cur->tag = arg->tag;
 			focused_window[arg->tag] = cur->win;
 		}
@@ -620,14 +663,16 @@ static void change_mode(const Arg *arg) {
 	tag.mode = mode[tag.cur];
 	Client *cur = chead->next;
 	if(arg->i == 1) {
-		XMapWindow(dpy, tabs);
 		for(; cur != NULL; cur = cur->next) {
 			if(cur->tag == tag.cur && cur->win != root && cur->win != tabs) {
 				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 				XMoveResizeWindow(dpy, cur->frame, 0, bar.height+tab_height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 			}
 		}
-		draw_tabs();
+		if(num_clients[tag.cur] > 0) {
+			XMapWindow(dpy, tabs);
+			draw_tabs();
+		}
 	}
 	else if(arg->i == 0) {
 		XUnmapWindow(dpy, tabs);
@@ -671,7 +716,10 @@ static void destroy_window(const Arg *arg) {
 			XUnmapWindow(dpy, cur->win);
 			XUnmapWindow(dpy, cur->frame);
 			tmp_arg->i = 1;
-			change_focus(tmp_arg);
+			if(cnt == num_clients[tag.cur])
+				change_focus_back(tmp_arg);
+			else 
+				change_focus_front(tmp_arg);
 			if(cnt != num_clients[tag.cur] && cnt != 0)
 				pop(chead, cnt);
 			else if(cnt == num_clients[tag.cur]) 
