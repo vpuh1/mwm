@@ -9,6 +9,7 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define LENGTH(X) (sizeof X / sizeof X[0])
 #define BORDER_WIDTH 1
+#define TAB_SPACE 5
 #define CLEANMASK(mask) (mask & (ShiftMask | ControlMask | Mod1Mask | Mod2Mask | Mod3Mask | Mod4Mask | Mod5Mask))
 
 /* linked list for clients */
@@ -70,6 +71,7 @@ static int tag_width_sum = 0;
 static int tag_x[9];
 static int tag_y;
 static int tab_x = 0;
+static int tab_y;
 static int tab_width;
 static int active_tab = 0;
 static int tab_height;
@@ -92,7 +94,11 @@ static Cursor move_cursor;
 static XWindowAttributes attr;
 static XFontStruct *font;
 static XButtonEvent start;
-static char output[32];
+static char output[275];
+static int direction;
+static int ascent;
+static int descent;
+static XCharStruct overall;
 
 /* function declaration */
 static void print_list(Client *head);
@@ -277,6 +283,8 @@ static void create_tabs() {
 	tab_width = display_width;
 	tab_height = 12+BORDER_WIDTH;
 	tabs = XCreateSimpleWindow(dpy, root, 0, bar.height, display_width, tab_height, 0, BlackPixel(dpy, 0), BlackPixel(dpy, 0));
+	XTextExtents(font, output, strlen(output), &direction, &ascent, &descent, &overall);
+	tab_y = tab_height / 2 + (ascent - descent) / 2;
 }
 
 static void load_font() {
@@ -318,10 +326,6 @@ void get_win_name() {
 static void init_bar(){
 	int x;
 	int y;
-	int direction;
-	int ascent;
-	int descent;
-	XCharStruct overall;
 	for(int i = 0; i < 9; i++){
 		XTextExtents(font, bar.text[i], bar.text_len[i], &direction, &ascent, &descent, &overall);
 		tag_width[i] = overall.width;
@@ -341,7 +345,12 @@ static void init_bar(){
 	}
 	get_win_name();
 	output[strlen(output)-1] = ' ';
-	XDrawString(dpy, win, bar.gc, x+bar.space, y, output, strlen(output));
+	if(strlen(output) >= 275) {
+		output[strlen(output)-2] = '.';
+		output[strlen(output)-3] = '.';
+		output[strlen(output)-4] = '.';
+	}
+	XDrawString(dpy, win, bar.gc, tag_x[8]+tag_width[8]+3*bar.space/2, y, output, strlen(output));
 }
 
 static void expose_bar() {
@@ -351,7 +360,12 @@ static void expose_bar() {
 	for(int i = 0; i < 9; i++){
 		XDrawString(dpy, win, bar.gc, tag_x[i]+bar.space/2, tag_y, bar.text[i], bar.text_len[i]);
 	}
-	XDrawString(dpy, win, bar.gc, tag_x[8]+3*bar.space/2, tag_y, output, strlen(output));
+	if(strlen(output) >= 275) { 
+		output[strlen(output)-2] = '.';
+		output[strlen(output)-3] = '.';
+		output[strlen(output)-4] = '.';
+	}
+	XDrawString(dpy, win, bar.gc, tag_x[8]+tag_width[8]+3*bar.space/2, tag_y, output, strlen(output));
 	draw_bar(tag.prev, tag.cur);
 }
 
@@ -372,12 +386,15 @@ static void draw_tabs() {
 		tab_width = display_width;
 	XFillRectangle(dpy, tabs, bg_gc, 0, 0, display_width, tab_height);
 	for(int i = 0; i < num_clients[tag.cur] - 1; i++) {
-		if(i == active_tab)
+		if(i == active_tab) {
 			XFillRectangle(dpy, tabs, title_gc, tab_x, 0, tab_width, tab_height);
+		}
+		XDrawString(dpy, tabs, bar.gc, tab_x + TAB_SPACE, tab_y, output, strlen(output));
 		tab_x += tab_width;
 	}
 	if(num_clients[tag.cur] - 1 == active_tab)
 		XFillRectangle(dpy, tabs, title_gc, tab_x, 0, display_width-tab_x, tab_height);
+	XDrawString(dpy, tabs, bar.gc, tab_x + TAB_SPACE, tab_y, output, strlen(output));
 
 }
 
@@ -410,11 +427,11 @@ static void init() {
 	tag.mode = 0;
 	open_display();
 	create_bar();
-	create_tabs();
 	setup_gc();
 	load_font();
 	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
 	init_bar();
+	create_tabs();
 	init_windows();
 }
 
@@ -433,8 +450,8 @@ static void frame(Window w) {
 		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, attr.width, attr.height, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
 	else {
 		frame = XCreateSimpleWindow(dpy, root, 0, bar.height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH, BORDER_WIDTH, accent.pixel, BlackPixel(dpy, 0));
-		XMoveResizeWindow(dpy, w, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-BORDER_WIDTH-tab_height);
-		XMoveResizeWindow(dpy, frame, 0, bar.height+tab_height-BORDER_WIDTH, display_width-2*BORDER_WIDTH, display_height-bar.height-BORDER_WIDTH-tab_height);
+		XMoveResizeWindow(dpy, w, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
+		XMoveResizeWindow(dpy, frame, 0, bar.height+tab_height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 	}
 	push_back(chead, w, frame, tag.cur, cend);
 	XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | KeyPressMask | KeyReleaseMask | ExposureMask);
@@ -704,8 +721,8 @@ static void change_mode(const Arg *arg) {
 	if(arg->i == 1) {
 		for(; cur != NULL; cur = cur->next) {
 			if(cur->tag == tag.cur && cur->win != root && cur->win != tabs) {
-				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-BORDER_WIDTH-tab_height);
-				XMoveResizeWindow(dpy, cur->frame, 0, bar.height+tab_height-BORDER_WIDTH, display_width-2*BORDER_WIDTH, display_height-bar.height-BORDER_WIDTH-tab_height);
+				XMoveResizeWindow(dpy, cur->win, 0, 0, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
+				XMoveResizeWindow(dpy, cur->frame, 0, bar.height+tab_height, display_width-2*BORDER_WIDTH, display_height-bar.height-2*BORDER_WIDTH-tab_height);
 			}
 		}
 		if(num_clients[tag.cur] > 0) {
