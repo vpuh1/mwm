@@ -90,6 +90,7 @@ static Cursor move_cursor;
 static XWindowAttributes attr;
 static XFontStruct *font;
 static XButtonEvent start;
+static char output[32];
 
 /* function declaration */
 static void print_list(Client *head);
@@ -116,6 +117,7 @@ static void change_focus_front(const Arg *arg);
 static void change_focus_back(const Arg *arg);
 static void destroy_window(const Arg *arg);
 static void change_mode(const Arg *arg);
+static void get_win_name();
 
 #include "config.h"
 
@@ -276,6 +278,33 @@ static void load_font() {
 	XSetFont(dpy, bar.gc, font->fid);
 }
 
+void get_win_name() {
+	int link[2];
+	pid_t pid;
+
+	if(pipe(link) == -1) {
+		fprintf(stderr, "mwm: cannot get window name (pipe)\n");
+		return;
+	}
+	if((pid  = fork()) == -1) {
+		fprintf(stderr, "mwm: cannot get window name (fork)\n");
+		return;
+	}
+	if(pid == 0) {
+		dup2 (link[1], STDOUT_FILENO);
+		close(link[0]);
+		close(link[1]);
+		execvp(cmd_get_win_name[0], cmd_get_win_name);
+		fprintf(stderr, "mwm: cannot get window name (execvp)\n");
+		exit(EXIT_FAILURE);
+	}
+	else {
+		close(link[1]);
+		read(link[0], output, sizeof(output));
+		fprintf(stderr, "OUTPUT: %s\n", output);
+	}
+}
+
 static void init_bar(){
 	int x;
 	int y;
@@ -300,6 +329,9 @@ static void init_bar(){
 			x += overall.width+bar.space;
 		XDrawString(dpy, win, bar.gc, x, y, bar.text[i], bar.text_len[i]);
 	}
+	get_win_name();
+	output[strlen(output)-1] = ' ';
+	XDrawString(dpy, win, bar.gc, x+bar.space, y, output, strlen(output));
 }
 
 static void expose_bar() {
@@ -309,6 +341,7 @@ static void expose_bar() {
 	for(int i = 0; i < 9; i++){
 		XDrawString(dpy, win, bar.gc, tag_x[i]+bar.space/2, tag_y, bar.text[i], bar.text_len[i]);
 	}
+	XDrawString(dpy, win, bar.gc, tag_x[8]+3*bar.space/2, tag_y, output, strlen(output));
 	draw_bar(tag.prev, tag.cur);
 }
 
@@ -411,6 +444,7 @@ static void map_request(XMapRequestEvent e) {
 	XMapWindow(dpy, e.window);
 	XSetInputFocus(dpy, e.window, RevertToPointerRoot, CurrentTime);
 	focused_window[tag.cur] = e.window;
+	//char *name = get_win_name();
 	if(tag.mode == 1) {
 		XMapWindow(dpy, tabs);
 		active_tab++;
@@ -688,6 +722,7 @@ static void spawn(const Arg *arg) {
 		execvp(((char **)arg->name)[0], (char **)arg->name);
 	}
 }
+
 
 static void key_press(XKeyPressedEvent e) {
 	KeySym keysym = XKeycodeToKeysym(dpy, e.keycode, 0);

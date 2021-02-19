@@ -8,7 +8,9 @@ char accent_color[] = "#1E81B0";
 char fg_color[] = "#FFFFFF";
 char bg_color[] = "#21130D";
 
-static const char *term_name[]  = { "st", NULL };
+static char *cmd_term_name[]  = { "st", NULL };
+/* static char *cmd_get_win_name[] = { "xdotool", "getactivewindow", "getwindowname", NULL }; */
+static char *cmd_get_win_name[] = { "pwd", NULL };
 
 static Key keys[] = {
 	{ MODKEY, XK_1, change_ws, {.tag = 0} },
@@ -29,7 +31,7 @@ static Key keys[] = {
 	{ MODKEY|ShiftMask, XK_7, move_to_ws, {.tag = 6} },
 	{ MODKEY|ShiftMask, XK_8, move_to_ws, {.tag = 7} },
 	{ MODKEY|ShiftMask, XK_9, move_to_ws, {.tag = 8} },
-	{ MODKEY, XK_Return, spawn, {.name = term_name} },
+	{ MODKEY, XK_Return, spawn, {.name = cmd_term_name} },
 	{ MODKEY, XK_Tab, change_focus_back, {.i = 1} },
 	{ MODKEY, XK_m, change_mode, {.i = 1} },
 	{ MODKEY, XK_f, change_mode, {.i = 0} },
