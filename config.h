@@ -2,13 +2,14 @@
 /* tags for bar */
 char *bar_tags[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
 /* default font -- fixed */
-static const char font_name[] = "-*-helvetica-*-r-*-*-14-*-*-*-*-*-*-*";
+//static const char font_name[] = "-*-helvetica-*-r-*-*-14-*-*-*-*-*-*-*";
+static const char font_name[] = "monospace 10";
 /* colors */
 char accent_color[] = "#1E81B0";
 char fg_color[] = "#FFFFFF";
 char bg_color[] = "#21130D";
 
-static char *cmd_term_name[]  = { "st", NULL };
+static char *cmd_term_name[]  = { "kitty", NULL };
 /* static char *cmd_get_win_name[] = { "xdotool", "getactivewindow", "getwindowname", NULL }; */
 static char *cmd_get_win_name[] = { "pwd", NULL };
 

@@ -638,17 +638,19 @@ static void destroy_window(const Arg *arg) {
 				change_focus_back(tmp_arg);
 			else 
 				change_focus_front(tmp_arg);
-			if(cnt != num_clients[tag.cur] && cnt != 0)
-				pop(chead, cnt);
+			if (cnt == 1)
+				pop_front(&chead);
 			else if(cnt == num_clients[tag.cur]) 
 				pop_back(chead, cend);
+			else 
+				pop(chead, cnt);
 			XDestroyWindow(dpy, tmp_win);
 			XDestroyWindow(dpy, tmp_frame);
 			break;
 		}
 	}
+	num_clients[tag.cur]--;
 	if(tag.mode == 1) {
-		num_clients[tag.cur]--;
 		if(active_tab == num_clients[tag.cur])
 			active_tab--;
 		draw_tabs();
@@ -686,7 +688,7 @@ void get_win_name() {
 
 static void spawn(const Arg *arg) { 
 	pid_t pid;
-	pid  = fork();
+	pid = fork();
 	if(pid == 0) {
 		execvp(((char **)arg->name)[0], (char **)arg->name);
 	}
