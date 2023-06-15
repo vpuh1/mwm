@@ -1,8 +1,7 @@
 #define MODKEY Mod4Mask
 /* tags for bar */
 char *bar_tags[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
-/* default font -- fixed */
-//static const char font_name[] = "-*-helvetica-*-r-*-*-14-*-*-*-*-*-*-*";
+/* default font */
 static const char font_name[] = "monospace 10";
 /* colors */
 char accent_color[] = "#1E81B0";
