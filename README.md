@@ -4,6 +4,7 @@ Minimalistic Window Manager written in C.
 ### Description
 Mwm is a minimalistic window manger written in C. It has 9 workspaces and two stacking modes (layots): monocle and floating.
 You can move windows around the workspaces and resize them.
+
 ![mwm screenshot](mwm.png)
 ### Installation
 Clone this repo, after that:
